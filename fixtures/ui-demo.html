@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Slide Status UI Demo</title>
+    <style>
+      body {
+        margin: 24px;
+        font-family: "Google Sans", Roboto, Arial, sans-serif;
+        background: #f8f9fa;
+      }
+
+      .thumb {
+        width: 160px;
+        height: 90px;
+        margin-bottom: 16px;
+        border-radius: 4px;
+        background: #fff;
+        border: 2px solid #1a73e8;
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Slide Status UI Demo</h1>
+    <div class="thumb" id="thumb"></div>
+    <div id="badge-mount"></div>
+
+    <script type="module">
+      const STATUS_OPTIONS = [
+        { value: 'none', label: 'No status', color: '#9aa0a6' },
+        { value: 'todo', label: 'To do', color: '#f9ab00' },
+        { value: 'in-progress', label: 'In progress', color: '#1a73e8' },
+        { value: 'done', label: 'Done', color: '#34a853' },
+      ];
+
+      class ProgressStatusChip extends HTMLElement {
+        connectedCallback() {
+          const shadow = this.attachShadow({ mode: 'open' });
+          shadow.innerHTML = `
+            <style>
+              :host { position:absolute; top:4px; right:4px; }
+              .chip-button {
+                anchor-name: --status-chip;
+                width:18px; height:18px; border-radius:999px;
+                border:2px solid var(--chip-color,#9aa0a6);
+                background:#fff; cursor:pointer;
+              }
+              .chip-button[data-status]:not([data-status="none"]) {
+                background:var(--chip-color); border-color:var(--chip-color);
+              }
+              .panel {
+                position-anchor: --status-chip;
+                position-area: block-end span-inline-end;
+                inset:auto;
+                margin-top:4px; padding:6px; border:1px solid #dadce0;
+                border-radius:8px; background:#fff;
+              }
+              button.option {
+                display:block; width:100%; text-align:left; border:0;
+                background:transparent; padding:8px 10px; cursor:pointer;
+              }
+            </style>
+            <button class="chip-button" popovertarget="panel" popovertargetaction="toggle" data-status="todo"></button>
+            <div id="panel" class="panel" popover="auto">
+              ${STATUS_OPTIONS.map((o) => `<button class="option" data-status="${o.value}">${o.label}</button>`).join('')}
+            </div>
+          `;
+          const button = shadow.querySelector('.chip-button');
+          button.style.setProperty('--chip-color', '#f9ab00');
+          shadow.querySelectorAll('.option').forEach((option) => {
+            option.addEventListener('click', () => {
+              const status = option.dataset.status;
+              const color = STATUS_OPTIONS.find((o) => o.value === status).color;
+              button.dataset.status = status;
+              button.style.setProperty('--chip-color', color);
+              shadow.getElementById('panel').hidePopover();
+            });
+          });
+        }
+      }
+
+      class ProgressDeckBadge extends HTMLElement {
+        connectedCallback() {
+          const shadow = this.attachShadow({ mode: 'open' });
+          shadow.innerHTML = `
+            <style>
+              .percent-button {
+                anchor-name: --progress-badge;
+                border:1px solid #dadce0; border-radius:999px; padding:4px 10px;
+                background:#fff; cursor:default;
+              }
+              .detail-panel {
+                position-anchor: --progress-badge;
+                top: anchor(bottom);
+                left: anchor(left);
+                margin-top:6px; padding:10px 12px; border:1px solid #dadce0;
+                border-radius:10px; background:#fff;
+              }
+            </style>
+            <button class="percent-button" interestfor="detail">67%</button>
+            <div id="detail" class="detail-panel" popover="hint">
+              <div>Done — 2</div>
+              <div>To do — 1</div>
+            </div>
+          `;
+        }
+      }
+
+      customElements.define('progress-status-chip', ProgressStatusChip);
+      customElements.define('progress-deck-badge', ProgressDeckBadge);
+
+      document.getElementById('thumb').append(document.createElement('progress-status-chip'));
+      document.getElementById('badge-mount').append(document.createElement('progress-deck-badge'));
+    </script>
+  </body>
+</html>
