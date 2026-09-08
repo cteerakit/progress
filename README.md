@@ -1,6 +1,8 @@
 # Progress for Google Slides
 
+![Progress for Google Slides](docs/marquee.png)
 
+**[Install from Chrome Web Store](https://chromewebstore.google.com/detail/mgebbidbnfnomiilkimbiplmkafccmpf)**
 
 A Chrome extension for Google Slides that lets you assign **No status**, **To do**, **In progress**, **Need attention**, and **Done** to each slide from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via Google Drive metadata.
 
@@ -162,12 +164,10 @@ https://cteerakit.github.io/progress/
 
 GitHub Pages is served from the `docs/` folder. In the repository settings, set Pages to deploy from branch `main`, folder `/docs`.
 
-Chrome Web Store: https://chromewebstore.google.com/detail/progress-for-google-slides/mgebbidbnfnomiilkimbiplmkafccmpf
+Chrome Web Store: https://chromewebstore.google.com/detail/mgebbidbnfnomiilkimbiplmkafccmpf
 
 
 ## Legal
-
-
 
 - [Privacy Policy](PRIVACY.md)
 - [Terms of Service](TERMS.md)
