@@ -1,6 +1,6 @@
 {
   "name": "progress",
-  "description": "Track slide completion in Google Slides with filmstrip status chips and optional Drive sync",
+  "description": "Track slide progress in Google Slides and sync with collaborators.",
   "private": true,
   "version": "1.0.0",
   "type": "module",

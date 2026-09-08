@@ -64,11 +64,11 @@ Progress for Google Slides
 
 ```
 
-Track slide progress in Google Slides. Set To do, In progress, Need attention, or Done on filmstrip thumbnails and sync with collaborators.
+Track slide progress in Google Slides and sync with collaborators.
 
 ```
 
-*(131 characters)*
+*(70 characters)*
 
 
 
@@ -232,7 +232,7 @@ Progress for Google Slides
 
 **Short Description**
 
-Track slide progress in Google Slides. Set To do, In progress, Need attention, or Done on filmstrip thumbnails and sync with collaborators.
+Track slide progress in Google Slides and sync with collaborators.
 
 
 

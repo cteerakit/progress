@@ -50,7 +50,7 @@ export default defineConfig({
     ...(extensionPublicKey ? { key: extensionPublicKey } : {}),
     name: 'Progress for Google Slides',
     description:
-      'Track slide completion in Google Slides. Assign To do, In progress, Need attention, or Done from the filmstrip and sync with collaborators.',
+      'Track slide progress in Google Slides and sync with collaborators.',
     permissions: ['storage', 'identity', 'alarms'],
     host_permissions: ['https://www.googleapis.com/drive/v3/*'],
     oauth2: {
