@@ -48,19 +48,19 @@ WXT dev mode writes to `.output/chrome-mv3-dev`. That folder does **not** includ
 
 
 
-For standalone unpacked testing (no dev server), use the production build instead:
+For standalone unpacked testing (no dev server), use a local build with a stable extension ID:
 
 
 
 ```bash
 
-npm run build
+npm run build:local
 
 ```
 
 
 
-Load the unpacked extension from `.output/chrome-mv3`.
+Load the unpacked extension from `.output/chrome-mv3-dev`.
 
 
 
@@ -154,6 +154,15 @@ npm run zip
 
 - `https://www.googleapis.com/drive/v3/*` — read/write presentation metadata
 
+
+
+## Website
+
+https://cteerakit.github.io/progress/
+
+GitHub Pages is served from the `docs/` folder. In the repository settings, set Pages to deploy from branch `main`, folder `/docs`.
+
+Chrome Web Store: https://chromewebstore.google.com/detail/progress-for-google-slides/mgebbidbnfnomiilkimbiplmkafccmpf
 
 
 ## Legal

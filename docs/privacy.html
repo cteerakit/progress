@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Privacy Policy for Progress for Google Slides."
+    />
+    <title>Privacy Policy — Progress for Google Slides</title>
+    <link rel="icon" href="favicon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="index.html">
+        <img src="icon-128.png" alt="" width="32" height="32" />
+        Progress for Google Slides
+      </a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="index.html">Home</a>
+        <a href="privacy.html" aria-current="page">Privacy</a>
+        <a href="terms.html">Terms</a>
+      </nav>
+    </header>
+
+    <main id="main" class="page">
+      <header>
+        <h1>Privacy Policy</h1>
+        <p>Progress for Google Slides · Last updated September 8, 2026</p>
+      </header>
+
+      <p>
+        This Privacy Policy describes how Progress for Google Slides ("the Extension")
+        handles information when you use our Chrome extension.
+      </p>
+
+      <h2>Summary</h2>
+      <p>
+        The Extension adds slide status labels inside Google Slides. By default, status data
+        stays in your browser. If you choose to sign in with Google, status labels are stored
+        in Google Drive file metadata on presentations you can edit so collaborators can see
+        the same statuses. The Extension does not read slide text, images, or your browsing
+        history, and it does not sell your data.
+      </p>
+
+      <h2>What Data We Collect</h2>
+      <p><strong>Data stored locally in your browser</strong></p>
+      <ul>
+        <li>
+          <strong>Slide statuses</strong> — Status labels, internal slide identifiers, and
+          update timestamps.
+        </li>
+        <li>
+          <strong>Presentation identifiers</strong> — Google Drive file IDs for
+          presentations where you have used the Extension.
+        </li>
+        <li>
+          <strong>Sync state</strong> — Sign-in status, last sync time, and recent sync
+          error messages shown in the popup.
+        </li>
+      </ul>
+      <p>
+        This data is stored in <code>chrome.storage.local</code> and is used only to power
+        the Extension UI.
+      </p>
+
+      <p><strong>Data sent to Google when you sign in</strong></p>
+      <ul>
+        <li>
+          <strong>Authentication</strong> — Google OAuth through Chrome's identity API with
+          the <code>drive.metadata</code> scope. We do not receive your Google password.
+        </li>
+        <li>
+          <strong>Slide status metadata</strong> — Status labels written to the
+          presentation's Drive <code>appProperties</code> metadata for files you can edit.
+        </li>
+        <li>
+          <strong>Drive file access</strong> — Metadata read/write only on presentations
+          you open in Google Slides while using the Extension.
+        </li>
+      </ul>
+
+      <p><strong>Data we do not collect</strong></p>
+      <ul>
+        <li>Slide text, speaker notes, images, or other presentation content</li>
+        <li>Browsing history or activity outside Google Slides</li>
+        <li>Analytics, telemetry, crash reports, or advertising identifiers</li>
+        <li>Financial, health, or location information</li>
+      </ul>
+
+      <h2>How We Use Data</h2>
+      <p>
+        We use data solely to provide Extension features: status chips, progress badges,
+        local caching, optional collaborator sync, and sync status in the popup. We do not use
+        your data for advertising, creditworthiness, or unrelated purposes.
+      </p>
+
+      <h2>How Data Is Stored</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Location</th>
+            <th>When</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Slide statuses and presentation cache</td>
+            <td>Your browser</td>
+            <td>While the Extension is installed</td>
+          </tr>
+          <tr>
+            <td>Slide status metadata</td>
+            <td>Google Drive file metadata</td>
+            <td>When you are signed in and sync</td>
+          </tr>
+          <tr>
+            <td>OAuth token</td>
+            <td>Managed by Chrome / Google</td>
+            <td>While you remain signed in</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The Extension does not operate its own servers and does not store your data on
+        developer-controlled infrastructure.
+      </p>
+
+      <h2>Third-Party Services</h2>
+      <p>When you sign in, the Extension uses:</p>
+      <ul>
+        <li>
+          <a href="https://policies.google.com/privacy" rel="noopener noreferrer"
+            >Google OAuth / Chrome Identity API</a
+          >
+        </li>
+        <li>
+          <a href="https://policies.google.com/privacy" rel="noopener noreferrer"
+            >Google Drive API</a
+          >
+        </li>
+      </ul>
+      <p>We do not share your data with any other third parties.</p>
+
+      <h2>Data Sharing</h2>
+      <p>
+        We do not sell, rent, or trade your data. If you sign in and sync, status metadata is
+        stored on Google Drive files you can edit. Collaborators with edit access can read
+        that metadata through Google Drive and this Extension.
+      </p>
+
+      <h2>Data Retention and Deletion</h2>
+      <ul>
+        <li>
+          <strong>Local data</strong> — Remains until you clear it or uninstall the
+          Extension. You can reset all slide statuses from the title-bar breakdown panel.
+        </li>
+        <li>
+          <strong>Drive metadata</strong> — Remains in the file until you reset statuses or
+          remove it through Google Drive. Signing out stops further sync.
+        </li>
+        <li>
+          <strong>Authentication</strong> — Click <strong>Sign out</strong> in the popup to
+          revoke the cached OAuth token.
+        </li>
+      </ul>
+
+      <h2>Permissions</h2>
+      <ul>
+        <li><code>storage</code> — Local cache of slide statuses</li>
+        <li><code>identity</code> — Optional Google sign-in</li>
+        <li><code>alarms</code> — Periodic background sync for open presentations</li>
+        <li>
+          <code>https://www.googleapis.com/drive/v3/*</code> — Read/write presentation
+          metadata when signed in
+        </li>
+      </ul>
+
+      <h2>Children's Privacy</h2>
+      <p>
+        The Extension is not directed at children under 13, and we do not knowingly collect
+        personal information from children.
+      </p>
+
+      <h2>Changes to This Policy</h2>
+      <p>
+        We may update this Privacy Policy when our data practices change. The date at the top
+        of this page reflects the latest revision. Continued use of the Extension after an
+        update means you accept the revised policy.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Contact:
+        <a href="mailto:c.teerakit@gmail.com">c.teerakit@gmail.com</a>
+        ·
+        <a href="https://github.com/cteerakit/progress/issues" rel="noopener noreferrer"
+          >GitHub Issues</a
+        >
+        ·
+        <a href="terms.html">Terms of Service</a>
+      </p>
+    </footer>
+  </body>
+</html>

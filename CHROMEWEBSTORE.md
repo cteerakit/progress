@@ -2,7 +2,7 @@
 
 
 
-> Last Updated: 2026-09-08
+> Last Updated: 2026-09-09
 
 
 
@@ -20,7 +20,7 @@
 
 - [ ] Capture at least 1 screenshot (1280×800 or 640×400) — see Screenshot Notes
 
-- [ ] Verify privacy policy URL loads: https://github.com/cteerakit/progress/blob/main/PRIVACY.md
+- [ ] Verify privacy policy URL loads: https://cteerakit.github.io/progress/privacy.html
 
 - [ ] Register OAuth client as **Chrome extension** with published extension ID
 
@@ -118,9 +118,9 @@ Status data is stored locally in your browser. If you sign in, status labels are
 
 
 
-Privacy Policy: https://github.com/cteerakit/progress/blob/main/PRIVACY.md
+Privacy Policy: https://cteerakit.github.io/progress/privacy.html
 
-Terms of Service: https://github.com/cteerakit/progress/blob/main/TERMS.md
+Terms of Service: https://cteerakit.github.io/progress/terms.html
 
 
 
@@ -190,9 +190,9 @@ Assign slide completion statuses on Google Slides filmstrip thumbnails and optio
 
 |-------|-------|
 
-| Privacy policy | https://github.com/cteerakit/progress/blob/main/PRIVACY.md |
+| Privacy policy | https://cteerakit.github.io/progress/privacy.html |
 
-| Homepage | https://github.com/cteerakit/progress |
+| Homepage | https://cteerakit.github.io/progress/ |
 
 | Support | https://github.com/cteerakit/progress/issues |
 
@@ -454,7 +454,7 @@ Use these answers in the Chrome Web Store **Privacy practices** tab. They must m
 
 
 
-**Privacy policy URL:** https://github.com/cteerakit/progress/blob/main/PRIVACY.md
+**Privacy policy URL:** https://cteerakit.github.io/progress/privacy.html
 
 
 
@@ -468,13 +468,13 @@ Use these answers in the Chrome Web Store **Privacy practices** tab. They must m
 
 **Privacy Policy URL**
 
-https://github.com/cteerakit/progress/blob/main/PRIVACY.md
+https://cteerakit.github.io/progress/privacy.html
 
 
 
 **Terms of Service URL**
 
-https://github.com/cteerakit/progress/blob/main/TERMS.md
+https://cteerakit.github.io/progress/terms.html
 
 
 
@@ -486,9 +486,13 @@ https://github.com/cteerakit/progress/blob/main/TERMS.md
 
 
 
-**GitHub Pages** (optional): enable Pages from the repo root and use
+**GitHub Pages** — enable Pages from branch `main`, folder `/docs`.
 
-`https://cteerakit.github.io/progress/privacy.html` if you prefer HTML over Markdown.
+- Homepage: https://cteerakit.github.io/progress/
+- Privacy: https://cteerakit.github.io/progress/privacy.html
+- Terms: https://cteerakit.github.io/progress/terms.html
+
+Chrome Web Store listing: https://chromewebstore.google.com/detail/progress-for-google-slides/mgebbidbnfnomiilkimbiplmkafccmpf
 
 
 
@@ -536,7 +540,7 @@ https://github.com/cteerakit/progress/issues
 
 **Homepage URL**
 
-https://github.com/cteerakit/progress
+https://cteerakit.github.io/progress/
 
 
 
@@ -624,7 +628,7 @@ TECHNICAL NOTES
 
 
 
-Privacy Policy: https://github.com/cteerakit/progress/blob/main/PRIVACY.md
+Privacy Policy: https://cteerakit.github.io/progress/privacy.html
 
 ```
 
@@ -660,7 +664,7 @@ Privacy Policy: https://github.com/cteerakit/progress/blob/main/PRIVACY.md
 
 - `drive.metadata` is a restricted OAuth scope; public listing requires Google verification.
 
-- Unpacked development requires either `npm run dev` (with dev server) or `npm run build` (production output).
+- Unpacked development requires either `npm run dev` (with dev server) or `npm run build:local` (stable extension ID). Do not include the manifest `key` field in Chrome Web Store uploads.
 
 - OAuth client must be registered to the stable extension ID from `npm run generate-extension-key`.
 
