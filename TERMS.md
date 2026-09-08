@@ -43,7 +43,7 @@ Your use of the Extension is also governed by our [Privacy Policy](PRIVACY.md). 
 
 ## 6. Intellectual Property
 
-The Extension is provided under the MIT License (see the project README) unless otherwise noted in the repository. "Progress for Google Slides" and associated branding are the property of the project maintainers.
+The Extension is provided under the MIT License (see [LICENSE](LICENSE)) unless otherwise noted in the repository. "Progress for Google Slides" and associated branding are the property of the project maintainers.
 
 You retain ownership of your presentations and the status labels you assign. We do not claim ownership of your Google Slides content or Drive files.
 

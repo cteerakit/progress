@@ -2,6 +2,7 @@
   "name": "progress",
   "description": "Track slide progress in Google Slides and sync with collaborators.",
   "private": true,
+  "license": "MIT",
   "version": "1.0.0",
   "type": "module",
   "scripts": {

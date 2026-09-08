@@ -180,7 +180,5 @@ If you find Progress useful, you can [sponsor the project on GitHub](https://git
 
 ## License
 
-
-
-MIT
+MIT — see [LICENSE](LICENSE).
 
