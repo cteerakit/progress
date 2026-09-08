@@ -1,81 +1,74 @@
 #!/usr/bin/env python3
-"""Generate extension icons at 16, 48, and 128 pixels."""
+"""Generate extension icons at 16, 48, and 128 pixels from public/logo.png."""
 
-import os
-import struct
-import zlib
+from collections import deque
+from pathlib import Path
+
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parent.parent
+SOURCE = ROOT / 'public' / 'logo.png'
+OUT_DIR = ROOT / 'public' / 'icons'
+SIZES = (16, 48, 128)
+BACKGROUND_THRESHOLD = 25
 
 
-def create_png(size: int, path: str) -> None:
-    """Write a minimal valid PNG without external dependencies."""
-    r, g, b = 0x1A, 0x73, 0xE8  # Google blue
+def remove_background(image: Image.Image) -> Image.Image:
+    """Make edge-connected near-black pixels transparent."""
+    result = image.convert('RGBA')
+    width, height = result.size
+    pixels = result.load()
 
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        crc = zlib.crc32(tag + data) & 0xFFFFFFFF
-        return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', crc)
+    def is_background(x: int, y: int) -> bool:
+        red, green, blue, alpha = pixels[x, y]
+        return (
+            alpha > 0
+            and red <= BACKGROUND_THRESHOLD
+            and green <= BACKGROUND_THRESHOLD
+            and blue <= BACKGROUND_THRESHOLD
+        )
 
-    rows = []
-    margin = max(1, size // 8)
-    radius = size // 4
+    queue = deque()
+    for x in range(width):
+        queue.append((x, 0))
+        queue.append((x, height - 1))
+    for y in range(height):
+        queue.append((0, y))
+        queue.append((width - 1, y))
 
-    for y in range(size):
-        row = bytearray([0])  # filter byte
-        for x in range(size):
-            inside = (
-                margin <= x < size - margin
-                and margin <= y < size - margin
-            )
-            if inside:
-                # Rounded corners approximation
-                corners = [
-                    (margin + radius, margin + radius),
-                    (size - margin - radius, margin + radius),
-                    (margin + radius, size - margin - radius),
-                    (size - margin - radius, size - margin - radius),
-                ]
-                corner_cut = False
-                for cx, cy in corners:
-                    if (
-                        (x < cx and y < cy)
-                        or (x > cx and y < cy)
-                        or (x < cx and y > cy)
-                        or (x > cx and y > cy)
-                    ):
-                        dx = abs(x - cx)
-                        dy = abs(y - cy)
-                        if dx * dx + dy * dy > radius * radius:
-                            corner_cut = True
-                            break
-                if not corner_cut:
-                    row.extend([r, g, b, 255])
-                else:
-                    row.extend([0, 0, 0, 0])
-            else:
-                row.extend([0, 0, 0, 0])
-        rows.append(bytes(row))
+    visited: set[tuple[int, int]] = set()
+    while queue:
+        x, y = queue.popleft()
+        if (x, y) in visited:
+            continue
+        if not (0 <= x < width and 0 <= y < height):
+            continue
+        if not is_background(x, y):
+            continue
 
-    raw = b''.join(rows)
-    compressed = zlib.compress(raw, 9)
+        visited.add((x, y))
+        pixels[x, y] = (0, 0, 0, 0)
+        queue.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
 
-    png = b'\x89PNG\r\n\x1a\n'
-    png += chunk(
-        b'IHDR',
-        struct.pack('>IIBBBBB', size, size, 8, 6, 0, 0, 0),
-    )
-    png += chunk(b'IDAT', compressed)
-    png += chunk(b'IEND', b'')
-
-    with open(path, 'wb') as f:
-        f.write(png)
+    return result
 
 
 def main() -> None:
-    out_dir = os.path.join(os.path.dirname(__file__), '..', 'public', 'icons')
-    os.makedirs(out_dir, exist_ok=True)
-    for size in (16, 48, 128):
-        path = os.path.join(out_dir, f'icon-{size}.png')
-        create_png(size, path)
-        print(f'Created {path} ({size}x{size})')
+    if not SOURCE.exists():
+        raise SystemExit(f'Source logo not found: {SOURCE}')
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    with Image.open(SOURCE) as source:
+        logo = remove_background(source)
+        logo.save(SOURCE, format='PNG', optimize=True)
+        print(f'Updated {SOURCE} with transparent background')
+
+        for size in SIZES:
+            icon = logo.resize((size, size), Image.Resampling.LANCZOS)
+            path = OUT_DIR / f'icon-{size}.png'
+            icon.save(path, format='PNG', optimize=True)
+            print(f'Created {path} ({size}x{size})')
 
 
 if __name__ == '__main__':

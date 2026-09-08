@@ -1,6 +1,6 @@
 {
-  "name": "slide-status",
-  "description": "Assign and sync slide statuses in Google Slides",
+  "name": "progress",
+  "description": "Track slide completion in Google Slides with filmstrip status chips and optional Drive sync",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -13,7 +13,8 @@
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
-    "generate-icons": "python3 scripts/generate_icons.py"
+    "generate-icons": "python3 scripts/generate_icons.py",
+    "generate-extension-key": "node scripts/generate-extension-key.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

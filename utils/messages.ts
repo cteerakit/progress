@@ -1,20 +1,31 @@
-import type { DeckState } from './status';
+import { parseSlideId, type DeckState } from './status';
+import { getChromeRuntime } from './extension-api';
 
 export type BackgroundMessage =
   | { type: 'PULL'; presentationId: string }
   | { type: 'PUSH'; presentationId: string }
   | { type: 'AUTH'; interactive: boolean }
-  | { type: 'AUTH_STATUS' };
+  | { type: 'AUTH_STATUS' }
+  | { type: 'SIGN_OUT' }
+  | { type: 'WATCH'; presentationId: string }
+  | { type: 'UNWATCH'; presentationId: string }
+  | { type: 'LOAD_DECK'; presentationId: string }
+  | { type: 'SAVE_DECK'; presentationId: string; deck: DeckState };
 
 export type BackgroundResponse =
-  | { ok: true; signedIn?: boolean; canEdit?: boolean }
+  | { ok: true; signedIn?: boolean; canEdit?: boolean; deck?: DeckState }
   | { ok: false; error: string; signedIn?: boolean };
 
 export async function sendBackgroundMessage(
   message: BackgroundMessage,
 ): Promise<BackgroundResponse> {
   try {
-    const response = await browser.runtime.sendMessage(message);
+    const runtime = getChromeRuntime();
+    if (!runtime?.sendMessage) {
+      return { ok: false, error: 'Extension runtime unavailable' };
+    }
+
+    const response = await runtime.sendMessage(message);
     if (response && typeof response === 'object' && 'ok' in response) {
       return response as BackgroundResponse;
     }
@@ -26,8 +37,10 @@ export async function sendBackgroundMessage(
   }
 }
 
-export async function pullRemoteDeck(presentationId: string): Promise<void> {
-  await sendBackgroundMessage({ type: 'PULL', presentationId });
+export async function pullRemoteDeck(
+  presentationId: string,
+): Promise<BackgroundResponse> {
+  return sendBackgroundMessage({ type: 'PULL', presentationId });
 }
 
 export async function pushLocalDeck(presentationId: string): Promise<void> {
@@ -42,6 +55,18 @@ export async function getAuthStatus(): Promise<BackgroundResponse> {
   return sendBackgroundMessage({ type: 'AUTH_STATUS' });
 }
 
+export async function requestSignOut(): Promise<BackgroundResponse> {
+  return sendBackgroundMessage({ type: 'SIGN_OUT' });
+}
+
+export async function watchPresentation(presentationId: string): Promise<void> {
+  await sendBackgroundMessage({ type: 'WATCH', presentationId });
+}
+
+export async function unwatchPresentation(presentationId: string): Promise<void> {
+  await sendBackgroundMessage({ type: 'UNWATCH', presentationId });
+}
+
 export function presentationIdFromUrl(url: string): string | null {
   const match = url.match(/\/presentation\/d\/([^/]+)/);
   return match?.[1] ?? null;
@@ -49,25 +74,7 @@ export function presentationIdFromUrl(url: string): string | null {
 
 export function slideIdFromHash(hash: string): string | null {
   const match = hash.match(/slide=id\.([^&]+)/);
-  return match ? `id.${match[1]}` : null;
+  return parseSlideId(match ? `id.${match[1]}` : null);
 }
 
-export function indexSlideKey(index: number): string {
-  return `index:${index}`;
-}
-
-export async function setSlideStatus(
-  presentationId: string,
-  slideKey: string,
-  status: DeckState['slides'][string]['status'],
-  getDeck: (id: string) => Promise<DeckState>,
-  saveDeck: (id: string, deck: DeckState) => Promise<void>,
-): Promise<DeckState> {
-  const deck = await getDeck(presentationId);
-  deck.slides[slideKey] = {
-    status,
-    updatedAt: Math.floor(Date.now() / 1000),
-  };
-  await saveDeck(presentationId, deck);
-  return deck;
-}
+export { indexSlideKey } from './status';

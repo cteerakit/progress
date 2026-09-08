@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "devtools-for-agents": {
+      "enabled": true
+    },
+    "modern-web-guidance": {
+      "enabled": true
+    }
+  }
+}

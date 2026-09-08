@@ -1,5 +1,5 @@
 import type { DeckState, SlideRecord } from './status';
-import { codeToStatus, statusToCode } from './status';
+import { isSlideKey, parseStatusCode, statusToCode } from './status';
 
 const CHUNK_KEY_PREFIX = 's';
 const SCHEMA_VERSION_KEY = 'v';
@@ -50,7 +50,10 @@ export function encodeDeckToAppProperties(
   slides: Record<string, SlideRecord>,
 ): Record<string, string> {
   const entries = Object.entries(slides)
-    .filter(([, record]) => record.status !== 'none' || record.updatedAt > 0)
+    .filter(
+      ([key, record]) =>
+        isSlideKey(key) && (record.status !== 'none' || record.updatedAt > 0),
+    )
     .sort(([a], [b]) => a.localeCompare(b))
     .map(
       ([slideId, record]) =>
@@ -75,7 +78,7 @@ export function decodeAppPropertiesToSlides(
       return ai - bi;
     });
 
-  const payload = chunkKeys.map((key) => appProperties[key]).join('');
+  const payload = chunkKeys.map((key) => appProperties[key]).join('|');
   const slides: Record<string, SlideRecord> = {};
 
   for (const part of payload.split('|')) {
@@ -84,15 +87,19 @@ export function decodeAppPropertiesToSlides(
     if (colon === -1) continue;
 
     const slideId = part.slice(0, colon);
+    if (!isSlideKey(slideId)) continue;
+
     const rest = part.slice(colon + 1);
     const lastColon = rest.lastIndexOf(':');
     if (lastColon === -1) continue;
 
-    const code = rest.slice(0, lastColon);
+    const status = parseStatusCode(rest.slice(0, lastColon));
+    if (!status) continue;
+
     const updatedAt = Number.parseInt(rest.slice(lastColon + 1), 10) || 0;
 
     slides[slideId] = {
-      status: codeToStatus(code),
+      status,
       updatedAt,
     };
   }
@@ -116,6 +123,10 @@ export function mergeDeckStates(
   for (const slideKey of allKeys) {
     const localRecord = local.slides[slideKey];
     const remoteRecord = remoteSlides[slideKey];
+
+    if (!isSlideKey(slideKey)) {
+      continue;
+    }
 
     if (!remoteRecord) {
       if (localRecord && localRecord.status !== 'none') {
@@ -190,8 +201,7 @@ export async function fetchDriveFile(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Drive files.get failed (${response.status}): ${body}`);
+    throw new Error(await formatDriveError('read', response));
   }
 
   const data = await response.json();
@@ -219,7 +229,55 @@ export async function updateDriveFileProperties(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Drive files.update failed (${response.status}): ${body}`);
+    throw new Error(await formatDriveError('update', response));
   }
+}
+
+async function formatDriveError(
+  action: 'read' | 'update',
+  response: Response,
+): Promise<string> {
+  const body = await response.text();
+  let apiMessage = '';
+  let reason = '';
+
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: {
+        message?: string;
+        status?: string;
+        details?: Array<{ reason?: string }>;
+      };
+    };
+    apiMessage = parsed.error?.message ?? '';
+    reason = parsed.error?.details?.[0]?.reason ?? parsed.error?.status ?? '';
+  } catch {
+    apiMessage = body.slice(0, 180);
+  }
+
+  if (
+    reason === 'SERVICE_DISABLED' ||
+    apiMessage.includes('has not been used in project') ||
+    apiMessage.includes('is disabled')
+  ) {
+    return 'Google Drive API is disabled for this Cloud project. Enable it, wait a minute, then retry.';
+  }
+
+  if (response.status === 401) {
+    return 'Drive sign-in expired. Sign in again.';
+  }
+
+  if (response.status === 403) {
+    return 'Drive access was denied. Confirm this Google account can edit the presentation.';
+  }
+
+  if (response.status === 404) {
+    return 'This presentation was not found on Drive.';
+  }
+
+  if (apiMessage) {
+    return `Could not ${action} Drive metadata (${response.status}): ${apiMessage}`;
+  }
+
+  return `Could not ${action} Drive metadata (${response.status}).`;
 }
