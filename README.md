@@ -167,6 +167,10 @@ GitHub Pages is served from the `docs/` folder. In the repository settings, set 
 Chrome Web Store: https://chromewebstore.google.com/detail/mgebbidbnfnomiilkimbiplmkafccmpf
 
 
+## Support
+
+If you find Progress useful, you can [sponsor the project on GitHub](https://github.com/sponsors/cteerakit).
+
 ## Legal
 
 - [Privacy Policy](PRIVACY.md)
