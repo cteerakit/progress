@@ -1,6 +1,5 @@
 import type { DeckState, SlideRecord, SlideStatus } from './status';
-import { resolveSlideRecord, STATUS_ORDER } from './status';
-import { indexSlideKey } from './messages';
+import { indexSlideKey, resolveSlideRecord, STATUS_ORDER } from './status';
 
 export interface SlideCountRow {
   status: SlideStatus;

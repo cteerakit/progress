@@ -1,5 +1,5 @@
-import { indexSlideKey, slideIdFromHash } from './messages';
-import { isDriveSlideId, parseSlideId, type DeckState } from './status';
+import { slideIdFromHash } from './messages';
+import { indexSlideKey, isDriveSlideId, parseSlideId, type DeckState } from './status';
 
 const FILMSTRIP_ROOT_SELECTORS = [
   '.punch-filmstrip-scroll',

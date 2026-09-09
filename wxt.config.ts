@@ -41,21 +41,13 @@ const oauthClientId =
   process.env.WXT_OAUTH_CLIENT_ID ??
   'YOUR_CLIENT_ID.apps.googleusercontent.com';
 
-const includeExtensionKey = (command: 'build' | 'serve', mode: string) =>
-  Boolean(
-    extensionPublicKey &&
-      (command === 'serve' || mode === 'development'),
-  );
-
 export default defineConfig({
   name: 'progress',
   imports: {
     dirs: [],
   },
-  manifest: (env) => ({
-    ...(includeExtensionKey(env.command, env.mode)
-      ? { key: extensionPublicKey }
-      : {}),
+  manifest: () => ({
+    ...(extensionPublicKey ? { key: extensionPublicKey } : {}),
     name: 'Progress for Google Slides',
     description:
       'Track slide progress in Google Slides and sync with collaborators.',

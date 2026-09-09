@@ -76,5 +76,3 @@ export function slideIdFromHash(hash: string): string | null {
   const match = hash.match(/slide=id\.([^&]+)/);
   return parseSlideId(match ? `id.${match[1]}` : null);
 }
-
-export { indexSlideKey } from './status';
