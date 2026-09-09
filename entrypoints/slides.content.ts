@@ -406,7 +406,7 @@ export default defineContentScript({
         await activateSignedInSession();
       },
       async () => {
-        if (!isSyncReady(syncState, presentationId) || !canEditDeck()) {
+        if (!syncState.signedIn || !canEditDeck()) {
           return;
         }
 

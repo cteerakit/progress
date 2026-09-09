@@ -194,22 +194,33 @@ const BADGE_STYLES = `
   .error-popover-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
   }
 
+  .error-reset-button,
   .error-copy-button {
     padding: 4px 10px;
     border: 1px solid #dadce0;
     border-radius: 4px;
     background: #fff;
-    color: #1a73e8;
     font: 500 12px/1 ${GOOGLE_SANS_STACK};
     cursor: pointer;
   }
 
+  .error-reset-button {
+    color: #c5221f;
+  }
+
+  .error-copy-button {
+    color: #1a73e8;
+  }
+
+  .error-reset-button:hover:not(:disabled),
   .error-copy-button:hover:not(:disabled) {
     background: #f8f9fa;
   }
 
+  .error-reset-button:disabled,
   .error-copy-button:disabled {
     cursor: default;
     opacity: 0.7;
@@ -580,12 +591,17 @@ export function createDeckBadge(): DeckBadgeElement {
   const errorPopoverActions = document.createElement('div');
   errorPopoverActions.className = 'error-popover-actions';
 
+  const errorResetButton = document.createElement('button');
+  errorResetButton.type = 'button';
+  errorResetButton.className = 'error-reset-button';
+  errorResetButton.textContent = 'Reset';
+
   const errorCopyButton = document.createElement('button');
   errorCopyButton.type = 'button';
   errorCopyButton.className = 'error-copy-button';
   errorCopyButton.textContent = 'Copy';
 
-  errorPopoverActions.append(errorCopyButton);
+  errorPopoverActions.append(errorResetButton, errorCopyButton);
   errorPopover.append(errorPopoverMessage, errorPopoverActions);
 
   let errorPopoverHideTimer: number | undefined;
@@ -637,6 +653,15 @@ export function createDeckBadge(): DeckBadgeElement {
 
   errorPopover.addEventListener('mouseenter', showErrorPopover);
   errorPopover.addEventListener('mouseleave', scheduleErrorPopoverHide);
+
+  errorResetButton.addEventListener('click', (event) => {
+    stopTitleBarInteraction(event);
+    if (!syncState.error || !syncState.signedIn || !canEdit) {
+      return;
+    }
+    setErrorPopoverOpen(false);
+    openResetDialog();
+  });
 
   errorCopyButton.addEventListener('click', async (event) => {
     stopTitleBarInteraction(event);
@@ -783,18 +808,23 @@ export function createDeckBadge(): DeckBadgeElement {
 
     if (syncState.error) {
       errorPopoverMessage.textContent = syncState.error;
+      errorResetButton.hidden = !syncState.signedIn || !canEdit;
+      errorResetButton.disabled = loading || !syncState.signedIn || !canEdit;
       errorCopyButton.disabled = false;
       errorCopyButton.textContent = 'Copy';
     } else {
       errorPopoverMessage.textContent = '';
+      errorResetButton.hidden = true;
       setErrorPopoverOpen(false);
     }
 
     const noneCount =
       counts.rows.find((row) => row.status === 'none')?.count ?? 0;
     const hasAssignedStatuses = counts.total > 0 && noneCount < counts.total;
+    const canReset =
+      syncState.signedIn && canEdit && hasAssignedStatuses;
     resetButton.hidden = !canEdit;
-    resetButton.disabled = loading || !isReady || !hasAssignedStatuses || !canEdit;
+    resetButton.disabled = loading || !canReset;
     if (!canEdit && resetDialog.open) {
       resetDialog.returnValue = 'cancel';
       resetDialog.close();
