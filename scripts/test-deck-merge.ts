@@ -1,4 +1,4 @@
-import { getDeckCounts } from '../utils/counts';
+import { getDeckCounts, resolveDeckSlideCount } from '../utils/counts';
 import {
   buildCatalogDiffRequests,
   buildCatalogDiffRequestGroups,
@@ -68,6 +68,7 @@ import {
   resetDeckStatuses,
   resolveSlideRecord,
   uniqueIndexMappings,
+  getMappedSlideCount,
   type DeckState,
   type SlideRecord,
 } from '../utils/status';
@@ -734,6 +735,47 @@ const multiCounts = getDeckCounts(
 assert(
   multiCounts.percent === 50 && multiCounts.done === 2,
   'completion percent must include every configured complete status',
+);
+
+const virtualizedIds: Record<string, string> = {};
+for (let index = 0; index < 103; index += 1) {
+  virtualizedIds[String(index)] = `id.gslide${index}`;
+}
+assert(
+  getMappedSlideCount(virtualizedIds) === 103,
+  'mapped slide count must use the full index map, not visible thumbnails',
+);
+assert(
+  resolveDeckSlideCount(14, virtualizedIds) === 103,
+  'badge total must not follow a virtualized filmstrip window',
+);
+assert(
+  resolveDeckSlideCount(104, virtualizedIds) === 104,
+  'a larger live filmstrip total must win after a slide is added',
+);
+assert(
+  resolveDeckSlideCount(1, {}) === 1,
+  'a 1-slide filmstrip must still count as 1 before mappings exist',
+);
+
+const virtualizedCounts = getDeckCounts(
+  resolveDeckSlideCount(14, virtualizedIds) ?? 0,
+  {
+    slides: {
+      'id.gslide0': { status: 'todo', updatedAt: 1 },
+      'id.gslide50': { status: 'done', updatedAt: 1 },
+      'id.gslide102': { status: 'done', updatedAt: 1 },
+    },
+    idsByIndex: virtualizedIds,
+  },
+  virtualizedIds,
+);
+assert(
+  virtualizedCounts.total === 103 &&
+    virtualizedCounts.done === 2 &&
+    virtualizedCounts.rows.find((row) => row.status === 'todo')?.count === 1 &&
+    virtualizedCounts.rows.find((row) => row.status === 'none')?.count === 100,
+  'breakdown must include off-screen slides before the filmstrip is scrolled',
 );
 
 const reassigned = reassignDeckStatus(

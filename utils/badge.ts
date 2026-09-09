@@ -328,67 +328,6 @@ const BADGE_STYLES = `
     color: currentColor;
   }
 
-  .reset-dialog {
-    width: min(22rem, calc(100vw - 32px));
-    padding: 20px;
-    border: 0;
-    border-radius: 8px;
-    background: #fff;
-    color: #202124;
-    font-family: ${GOOGLE_SANS_STACK};
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  }
-
-  .reset-dialog::backdrop {
-    background: rgba(0, 0, 0, 0.32);
-  }
-
-  .reset-dialog h2 {
-    margin: 0 0 12px;
-    font-size: 18px;
-    font-weight: 500;
-    line-height: 24px;
-  }
-
-  .reset-dialog p {
-    margin: 0 0 20px;
-    color: #5f6368;
-    font-size: 14px;
-    line-height: 20px;
-  }
-
-  .reset-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .reset-dialog button {
-    padding: 8px 16px;
-    border-radius: 4px;
-    font: 500 14px/20px ${GOOGLE_SANS_STACK};
-    cursor: pointer;
-  }
-
-  .reset-cancel {
-    border: 1px solid #dadce0;
-    background: #fff;
-    color: #1a73e8;
-  }
-
-  .reset-cancel:hover:not(:disabled) {
-    background: #f8f9fa;
-  }
-
-  .reset-confirm {
-    border: 0;
-    background: #c5221f;
-    color: #fff;
-  }
-
-  .reset-confirm:hover:not(:disabled) {
-    background: #a50e0e;
-  }
 `;
 
 let onSignIn: SignInHandler = async () => {};
@@ -512,63 +451,16 @@ export function createDeckBadge(): DeckBadgeElement {
 
   detailPanel.append(detailBody, resetButton);
 
-  const dialogIds = {
-    title: `reset-title-${detailPanel.id}`,
-    description: `reset-desc-${detailPanel.id}`,
-  };
-
-  const resetDialog = document.createElement('dialog');
-  resetDialog.className = 'reset-dialog';
-  resetDialog.setAttribute('role', 'alertdialog');
-  resetDialog.setAttribute('aria-labelledby', dialogIds.title);
-  resetDialog.setAttribute('aria-describedby', dialogIds.description);
-
-  const resetForm = document.createElement('form');
-  resetForm.method = 'dialog';
-
-  const resetTitle = document.createElement('h2');
-  resetTitle.id = dialogIds.title;
-  resetTitle.textContent = 'Reset all slide statuses?';
-
-  const resetDescription = document.createElement('p');
-  resetDescription.id = dialogIds.description;
-  resetDescription.textContent =
-    'Every slide in this presentation will be set to No status. This syncs with collaborators.';
-
-  const resetActions = document.createElement('div');
-  resetActions.className = 'reset-actions';
-
-  const cancelButton = document.createElement('button');
-  cancelButton.type = 'submit';
-  cancelButton.className = 'reset-cancel';
-  cancelButton.value = 'cancel';
-  cancelButton.textContent = 'Cancel';
-  cancelButton.setAttribute('autofocus', '');
-
-  const confirmButton = document.createElement('button');
-  confirmButton.type = 'submit';
-  confirmButton.className = 'reset-confirm';
-  confirmButton.value = 'confirm';
-  confirmButton.textContent = 'Reset';
-
-  resetActions.append(cancelButton, confirmButton);
-  resetForm.append(resetTitle, resetDescription, resetActions);
-  resetDialog.append(resetForm);
-
-  const openResetDialog = () => {
-    resetDialog.returnValue = '';
+  const confirmReset = () => {
     setPanelOpen(false);
-    try {
-      resetDialog.showModal();
-    } catch {
-      if (
-        window.confirm(
-          'Reset all slide statuses? Every slide in this presentation will be set to No status.',
-        )
-      ) {
-        void onResetAll();
-      }
+    if (
+      !window.confirm(
+        'Reset all slide statuses? Every slide in this presentation will be set to No status. This syncs with collaborators.',
+      )
+    ) {
+      return;
     }
+    void onResetAll();
   };
 
   resetButton.addEventListener('click', (event) => {
@@ -576,15 +468,7 @@ export function createDeckBadge(): DeckBadgeElement {
     if (!canEdit) {
       return;
     }
-    openResetDialog();
-  });
-
-  resetDialog.addEventListener('close', () => {
-    const value = resetDialog.returnValue;
-    resetDialog.returnValue = '';
-    if (value === 'confirm' && canEdit) {
-      void onResetAll();
-    }
+    confirmReset();
   });
 
   const syncButton = document.createElement('button');
@@ -671,7 +555,7 @@ export function createDeckBadge(): DeckBadgeElement {
       return;
     }
     setErrorPopoverOpen(false);
-    openResetDialog();
+    confirmReset();
   });
 
   errorCopyButton.addEventListener('click', async (event) => {
@@ -765,7 +649,6 @@ export function createDeckBadge(): DeckBadgeElement {
     percentButton.addEventListener(eventName, stopTitleBarInteraction);
     detailPanel.addEventListener(eventName, stopTitleBarInteraction);
     errorPopover.addEventListener(eventName, stopTitleBarInteraction);
-    resetDialog.addEventListener(eventName, stopTitleBarInteraction);
   }
 
   const render = () => {
@@ -840,10 +723,6 @@ export function createDeckBadge(): DeckBadgeElement {
       syncState.signedIn && canEdit && hasAssignedStatuses;
     resetButton.hidden = !canEdit;
     resetButton.disabled = loading || !canReset;
-    if (!canEdit && resetDialog.open) {
-      resetDialog.returnValue = 'cancel';
-      resetDialog.close();
-    }
 
     if (!syncState.signedIn) {
       syncButton.dataset.state = 'signed-out';
@@ -895,7 +774,7 @@ export function createDeckBadge(): DeckBadgeElement {
   };
 
   wrap.append(percentButton, syncButton, detailPanel, errorPopover);
-  shadow.append(wrap, resetDialog);
+  shadow.append(wrap);
   render();
   return host;
 }

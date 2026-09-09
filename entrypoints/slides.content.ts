@@ -7,7 +7,7 @@ import {
   STATUS_CHIP_SELECTOR,
   type StatusChipElement,
 } from '../utils/chip';
-import { getDeckCounts } from '../utils/counts';
+import { getDeckCounts, resolveDeckSlideCount } from '../utils/counts';
 import {
   batchDomWork,
   buildIndexSlideKeyMap,
@@ -142,7 +142,10 @@ export default defineContentScript({
       return getPresentationSlideCount();
     };
 
-    const getAuthoritativeSlideCount = (): number | null => confirmedSlideCount;
+    const getAuthoritativeSlideCount = (
+      indexSlideKeys: Record<string, string>,
+    ): number | null =>
+      resolveDeckSlideCount(confirmedSlideCount, indexSlideKeys);
 
     const observeFilmstripLayout = () => {
       if (!filmstripResizeObserver || !filmstripRoot) {
@@ -212,7 +215,7 @@ export default defineContentScript({
         : applyReadOnlyRemoteDeck(deck, incoming);
     };
 
-    const updateBadgeLoading = () => {
+    const updateBadgeLoading = (slideCount: number | null) => {
       const badgeElement = getBadge();
       if (!badgeElement) {
         return;
@@ -223,7 +226,7 @@ export default defineContentScript({
         return;
       }
 
-      badgeElement.setLoading(confirmedSlideCount == null);
+      badgeElement.setLoading(slideCount == null);
     };
 
     const publishActiveSlide = () => {
@@ -245,8 +248,8 @@ export default defineContentScript({
 
     const refreshUi = () => {
       scheduleSlideCountConfirmation();
-      const slideCount = getAuthoritativeSlideCount();
       const indexSlideKeys = buildIndexSlideKeyMap(deck, thumbnails);
+      const slideCount = getAuthoritativeSlideCount(indexSlideKeys);
 
       publishActiveSlide();
 
@@ -268,7 +271,7 @@ export default defineContentScript({
       getBadge()?.setPresets(statusPresets);
       getBadge()?.setSyncState(badgeSyncState());
       getBadge()?.setCanEdit(canEditDeck());
-      updateBadgeLoading();
+      updateBadgeLoading(slideCount);
     };
 
     const applyPresetConfig = (nextPresets: StatusPresetConfig) => {
@@ -431,7 +434,7 @@ export default defineContentScript({
     };
 
     const activateSignedInSession = async () => {
-      if (confirmedSlideCount == null) {
+      if (getAuthoritativeSlideCount(deck.idsByIndex) == null) {
         getBadge()?.setLoading(true);
       }
       try {

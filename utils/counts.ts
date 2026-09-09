@@ -1,5 +1,5 @@
 import type { DeckState, SlideRecord, SlideStatus } from './status';
-import { indexSlideKey, resolveSlideRecord } from './status';
+import { getMappedSlideCount, indexSlideKey, resolveSlideRecord } from './status';
 import type { StatusPresetConfig } from './status-presets';
 import { DEFAULT_STATUS_PRESET_CONFIG, getPresetLabel } from './status-presets';
 
@@ -14,6 +14,25 @@ export interface DeckCounts {
   done: number;
   percent: number;
   rows: SlideCountRow[];
+}
+
+/**
+ * Pick the live slide total for the title-bar breakdown.
+ *
+ * Google only keeps a window of filmstrip thumbnails in the DOM, so a
+ * filmstrip estimate can be just that window until the user scrolls. Synced
+ * `idsByIndex` covers the full deck. Use the larger of the two so the badge
+ * does not undercount; a later pull trims a stale mapping after deletes.
+ */
+export function resolveDeckSlideCount(
+  filmstripCount: number | null,
+  idsByIndex: Record<string, string>,
+): number | null {
+  const mapped = getMappedSlideCount(idsByIndex);
+  if (mapped != null && filmstripCount != null) {
+    return Math.max(mapped, filmstripCount);
+  }
+  return mapped ?? filmstripCount;
 }
 
 function getStatusForDeckIndex(

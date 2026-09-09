@@ -419,6 +419,19 @@ function getThumbnailStride(thumbnails: Element[]): number | null {
   return first.height;
 }
 
+function isFilmstripOverflowing(
+  filmstrip?: ParentNode | null,
+): boolean {
+  const scroll = filmstrip
+    ? getFilmstripScroll(filmstrip)
+    : document.querySelector<HTMLElement>('.punch-filmstrip-scroll');
+  if (!scroll) {
+    return false;
+  }
+
+  return scroll.scrollHeight > scroll.clientHeight + 1;
+}
+
 function estimateSlideCountFromScroll(
   scroll: HTMLElement | null,
   thumbnails: Element[],
@@ -430,7 +443,7 @@ function estimateSlideCountFromScroll(
   // Google sizes the filmstrip SVG to the viewport even for a 1-slide deck,
   // filling the rest with an empty background rect. That is not extra slides.
   // Only estimate from scroll height when the strip actually overflows.
-  if (scroll.scrollHeight <= scroll.clientHeight + 1) {
+  if (!isFilmstripOverflowing(scroll)) {
     return thumbnails.length;
   }
 

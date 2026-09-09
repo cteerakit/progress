@@ -217,6 +217,36 @@ export function uniqueIndexMappings(
   return result;
 }
 
+/** Highest contiguous-enough deck length implied by index → Drive id mappings. */
+export function getMappedSlideCount(
+  idsByIndex: Record<string, string>,
+): number | null {
+  let maxIndex = -1;
+  let mapped = 0;
+
+  for (const [index, slideId] of Object.entries(idsByIndex)) {
+    if (!isDriveSlideId(slideId)) {
+      continue;
+    }
+
+    const parsed = Number.parseInt(index, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      continue;
+    }
+
+    mapped += 1;
+    if (parsed > maxIndex) {
+      maxIndex = parsed;
+    }
+  }
+
+  if (mapped === 0) {
+    return null;
+  }
+
+  return Math.max(mapped, maxIndex + 1);
+}
+
 export function parseStatusCode(code: string): SlideStatus | null {
   if (CODE_TO_STATUS[code]) {
     return CODE_TO_STATUS[code];
