@@ -18,6 +18,7 @@ import {
 import {
   getAuthStatus,
   persistPresetsInTab,
+  clearPresentationHistory,
   pullRemoteDeck,
   pushLocalDeck,
   requestAuth,
@@ -81,6 +82,7 @@ const accountView = requireElement('account-view', HTMLElement);
 const historySummary = requireElement('history-summary', HTMLElement);
 const historyList = requireElement('history-list', HTMLOListElement);
 const historyLoadMore = requireElement('history-load-more', HTMLButtonElement);
+const historyClearButton = requireElement('history-clear', HTMLButtonElement);
 const historyEmpty = requireElement('history-empty', HTMLElement);
 
 const HISTORY_PAGE_SIZE = 25;
@@ -112,6 +114,7 @@ let presetEditor: PresetEditorController | null = null;
 let currentUserCatalog: UserCatalog = createEmptyUserCatalog();
 let allHistoryEntries: DeckHistoryEntry[] = [];
 let historyVisibleCount = HISTORY_PAGE_SIZE;
+let presentationDataGeneration = 0;
 
 function formatRelativeUnit(
   value: number,
@@ -202,6 +205,7 @@ function setBusy(busy: boolean): void {
   document.querySelector('.panel')?.setAttribute('aria-busy', String(busy));
   signInButton.disabled = busy;
   signOutButton.disabled = busy;
+  historyClearButton.disabled = busy || !canEditPresentationDeck();
 }
 
 function setSignedInEmail(state: SyncState): void {
@@ -235,6 +239,7 @@ function renderAccount(state: SyncState): void {
     }
     presetEditor?.setEditable(false);
     renderStatuses();
+    updateHistoryClearButton(allHistoryEntries.length > 0);
     return;
   }
 
@@ -245,6 +250,7 @@ function renderAccount(state: SyncState): void {
     statusDetail.dataset.tone = 'error';
     presetEditor?.setEditable(false);
     renderStatuses();
+    updateHistoryClearButton(allHistoryEntries.length > 0);
     return;
   }
 
@@ -254,13 +260,17 @@ function renderAccount(state: SyncState): void {
   delete statusDetail.dataset.tone;
   presetEditor?.setEditable(canEditPresentationDeck());
   renderStatuses();
+  updateHistoryClearButton(allHistoryEntries.length > 0);
 }
 
 function formatSlideNumber(slideIndex: number | null): string {
   return slideIndex != null ? String(slideIndex + 1) : '—';
 }
 
-function createHistoryAvatar(user: CollaborationUser | null): HTMLSpanElement {
+function createHistoryAvatar(
+  user: CollaborationUser | null,
+  updatedBy: number | undefined,
+): HTMLSpanElement {
   const avatar = document.createElement('span');
   avatar.className = 'history-item-avatar';
 
@@ -277,7 +287,12 @@ function createHistoryAvatar(user: CollaborationUser | null): HTMLSpanElement {
     avatar.textContent = user ? initialsFromEmail(user.email) : '?';
   }
 
-  avatar.title = user?.email ?? 'Unknown user';
+  if (user?.email) {
+    avatar.title = user.email;
+  } else if (updatedBy != null) {
+    avatar.title = 'Unknown collaborator';
+  }
+
   return avatar;
 }
 
@@ -298,9 +313,9 @@ function createHistoryItem(entry: DeckHistoryEntry): HTMLLIElement {
   const item = document.createElement('li');
   item.className = 'history-item';
   const editor = getUserFromCatalog(currentUserCatalog, entry.updatedBy);
-  item.title = `${statusLabelFor(entry.fromStatus)} → ${statusLabelFor(entry.status)}${editor ? ` · ${editor.email}` : ''}`;
+  item.title = `${statusLabelFor(entry.fromStatus)} → ${statusLabelFor(entry.status)}`;
 
-  const avatar = createHistoryAvatar(editor);
+  const avatar = createHistoryAvatar(editor, entry.updatedBy);
 
   const transition = document.createElement('span');
   transition.className = 'history-item-transition';
@@ -360,11 +375,18 @@ function appendHistoryEntries(entries: DeckHistoryEntry[]): void {
   }
 }
 
+function updateHistoryClearButton(hasHistory: boolean): void {
+  historyClearButton.hidden =
+    !activeSlide || !hasHistory || !canEditPresentationDeck();
+  historyClearButton.disabled = !canEditPresentationDeck();
+}
+
 function renderHistory(): void {
   historyList.replaceChildren();
   historySummary.textContent = '';
   historyList.hidden = true;
   historyLoadMore.hidden = true;
+  updateHistoryClearButton(false);
 
   if (!activeSlide) {
     historyEmpty.hidden = false;
@@ -382,6 +404,7 @@ function renderHistory(): void {
   }
 
   historyEmpty.hidden = true;
+  updateHistoryClearButton(true);
   historySummary.textContent = formatHistorySummary(
     allHistoryEntries.length,
     historyVisibleCount,
@@ -433,14 +456,36 @@ async function savePresets(nextPresets: StatusPresetConfig): Promise<void> {
   currentPresets = validated;
   renderHistory();
 
-  await persistPresetsInTab(presentationId, validated, true);
+  await persistPresetsInTab(presentationId, validated);
 
   if (deckChanged) {
     currentDeck = reassignedDeck;
     await saveDeck(presentationId, reassignedDeck);
   }
 
-  await pushLocalDeck(presentationId);
+  await pushLocalDeck(presentationId, { persistRemote: true });
+}
+
+async function clearHistory(): Promise<void> {
+  if (!activeSlide || !canEditPresentationDeck()) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Clear status history for this presentation? Slide statuses will stay the same. This syncs with collaborators.',
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  const presentationId = activeSlide.presentationId;
+  const response = await clearPresentationHistory(presentationId);
+  if (!response.ok) {
+    throw new Error(response.error);
+  }
+
+  currentDeck = response.deck ?? (await getDeck(presentationId));
+  renderHistory();
 }
 
 function ensurePresetEditor(): void {
@@ -491,8 +536,7 @@ function renderStatuses(): void {
   }
 
   if (!isEditAccessKnown(syncState, activeSlide.presentationId)) {
-    statusesEmpty.hidden = false;
-    statusesEmpty.textContent = 'Checking edit access…';
+    statusesEmpty.hidden = true;
     presetEditor?.setEditable(false);
     return;
   }
@@ -509,7 +553,17 @@ function renderStatuses(): void {
   presetEditor?.setEditable(true);
 }
 
-async function refreshPresentationData(): Promise<void> {
+function isPresentationDataCurrent(
+  generation: number,
+  presentationId: string,
+): boolean {
+  return (
+    generation === presentationDataGeneration &&
+    activeSlide?.presentationId === presentationId
+  );
+}
+
+async function loadPresentationDataFromCache(): Promise<void> {
   if (!activeSlide) {
     currentDeck = { slides: {}, idsByIndex: {} };
     currentPresets = cloneStatusPresetConfig(DEFAULT_STATUS_PRESET_CONFIG);
@@ -519,16 +573,46 @@ async function refreshPresentationData(): Promise<void> {
     return;
   }
 
-  if (syncState.signedIn && !getAnySyncError(syncState)) {
-    await pullRemoteDeck(activeSlide.presentationId);
-    syncState = await getSyncState();
-  }
-
-  currentDeck = await getDeck(activeSlide.presentationId);
-  currentPresets = await getPresentationStatusPresets(activeSlide.presentationId);
-  currentUserCatalog = await getPresentationUsers(activeSlide.presentationId);
+  const presentationId = activeSlide.presentationId;
+  currentDeck = await getDeck(presentationId);
+  currentPresets = await getPresentationStatusPresets(presentationId);
+  currentUserCatalog = await getPresentationUsers(presentationId);
   renderHistory();
   renderStatuses();
+}
+
+function syncPresentationDataInBackground(): void {
+  if (!activeSlide || !syncState.signedIn || getAnySyncError(syncState)) {
+    return;
+  }
+
+  const presentationId = activeSlide.presentationId;
+  const generation = ++presentationDataGeneration;
+
+  void (async () => {
+    try {
+      await pullRemoteDeck(presentationId);
+    } catch {
+      // Pull failures are recorded in sync state by the background worker.
+    }
+
+    if (!isPresentationDataCurrent(generation, presentationId)) {
+      return;
+    }
+
+    syncState = await getSyncState();
+    currentDeck = await getDeck(presentationId);
+    currentPresets = await getPresentationStatusPresets(presentationId);
+    currentUserCatalog = await getPresentationUsers(presentationId);
+    renderHistory();
+    renderStatuses();
+    renderAccount(syncState);
+  })();
+}
+
+async function refreshPresentationData(): Promise<void> {
+  await loadPresentationDataFromCache();
+  syncPresentationDataInBackground();
 }
 
 historyLoadMore.addEventListener('click', () => {
@@ -545,6 +629,12 @@ historyLoadMore.addEventListener('click', () => {
     historyVisibleCount,
   );
   updateHistoryLoadMore();
+});
+
+historyClearButton.addEventListener('click', () => {
+  void withBusy(async () => {
+    await clearHistory();
+  });
 });
 
 navHistoryButton.addEventListener('click', () => {

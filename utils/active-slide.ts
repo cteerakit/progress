@@ -9,6 +9,20 @@ export interface ActiveSlideState {
 
 export const ACTIVE_SLIDE_SESSION_KEY = 'activeSlide';
 
+export type RepublishActiveSlideMessage = {
+  type: 'REPUBLISH_ACTIVE_SLIDE';
+};
+
+export function isRepublishActiveSlideMessage(
+  message: unknown,
+): message is RepublishActiveSlideMessage {
+  return (
+    Boolean(message) &&
+    typeof message === 'object' &&
+    (message as RepublishActiveSlideMessage).type === 'REPUBLISH_ACTIVE_SLIDE'
+  );
+}
+
 export function isActiveSlideState(value: unknown): value is ActiveSlideState {
   if (!value || typeof value !== 'object') {
     return false;

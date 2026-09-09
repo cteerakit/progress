@@ -7,6 +7,8 @@ import {
   decodeMarkerLog,
   decodeMarkerLogV2,
   decodeMarkerLogV3,
+  decodeMarkerLogV4,
+  encodeClearedMarkerPayload,
   encodeMarkerPayloadCore,
   normalizeSlideLog,
   prepareSlideRecord,
@@ -56,13 +58,22 @@ export interface DecodedPresentationMetadata {
   slides: Record<string, SlideRecord>;
   idsByIndex: Record<string, string>;
   markers: SlideMarker[];
+  occupiedElementIds: Set<string>;
   catalog: CatalogMarker | null;
   users: UsersMarker | null;
 }
 
+const EMPTY_MARKER_RECORD: SlideRecord = { status: 'none', updatedAt: 0 };
+
 export function encodeMarkerPayload(record: SlideRecord): string {
   const prepared = prepareSlideRecord(record);
-  const log = normalizeSlideLog(prepared);
+  if (prepared.historyClearedAt != null) {
+    return encodeClearedMarkerPayload(prepared);
+  }
+  const log =
+    prepared.log?.length === 0
+      ? [{ status: prepared.status, updatedAt: prepared.updatedAt }]
+      : normalizeSlideLog(prepared);
   return encodeMarkerPayloadCore(log);
 }
 
@@ -91,6 +102,10 @@ export function decodeMarkerPayload(
 
   if (version === '3') {
     return decodeMarkerLogV3(token, rest);
+  }
+
+  if (version === '4') {
+    return decodeMarkerLogV4(token, rest);
   }
 
   return null;
@@ -196,26 +211,37 @@ export function decodePresentationMetadata(
 ): DecodedPresentationMetadata {
   const slides: Record<string, SlideRecord> = {};
   const markers: SlideMarker[] = [];
+  const occupiedElementIds = collectOccupiedElementIds(presentation);
   let catalog: CatalogMarker | null = null;
   let users: UsersMarker | null = null;
 
   for (const page of presentation.slides ?? []) {
     const slideKey = slideKeyFromObjectId(page.objectId);
+    const expectedMarkerId = markerElementIdForPage(page.objectId);
     for (const element of page.pageElements ?? []) {
-      if (element.title !== MARKER_TITLE) {
+      const isProgressMarker =
+        element.title === MARKER_TITLE || element.objectId === expectedMarkerId;
+      if (!isProgressMarker) {
         continue;
       }
 
       const record = decodeMarkerPayload(element.description);
-      if (!record || !slideRecordHasHistory(record)) {
+      if (record && slideRecordHasHistory(record)) {
+        slides[slideKey] = record;
+        markers.push({
+          elementId: element.objectId,
+          slideKey,
+          record,
+        });
         continue;
       }
 
-      slides[slideKey] = record;
+      // Shape already occupies the marker id (incomplete create, or no
+      // history yet). Keep it so a later sync updates instead of createShape.
       markers.push({
         elementId: element.objectId,
         slideKey,
-        record,
+        record: EMPTY_MARKER_RECORD,
       });
     }
   }
@@ -240,9 +266,27 @@ export function decodePresentationMetadata(
     slides,
     idsByIndex: buildIdsByIndexFromPresentation(presentation),
     markers,
+    occupiedElementIds,
     catalog,
     users,
   };
+}
+
+function collectOccupiedElementIds(
+  presentation: SlidesPresentation,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const page of catalogSearchPages(presentation)) {
+    if (page.objectId) {
+      ids.add(page.objectId);
+    }
+    for (const element of page.pageElements ?? []) {
+      if (element.objectId) {
+        ids.add(element.objectId);
+      }
+    }
+  }
+  return ids;
 }
 
 function markerElementIdForPage(pageObjectId: string): string {
@@ -325,15 +369,19 @@ function createMarkerRequests(
 }
 
 function updateMarkerRequests(
-  pageObjectId: string,
   elementId: string,
   record: SlideRecord,
 ): SlidesBatchRequest[] {
-  // Recreate the marker so size and transparency stay correct even if an
-  // earlier sync split createShape from its follow-up requests.
+  // Update alt text in place. Deleting and recreating the shape while the
+  // Slides editor is open leaves the document stuck on "Saving…".
   return [
-    deleteMarkerRequest(elementId),
-    ...createMarkerRequests(pageObjectId, record),
+    {
+      updatePageElementAltText: {
+        objectId: elementId,
+        title: MARKER_TITLE,
+        description: encodeMarkerPayload(record),
+      },
+    },
   ];
 }
 
@@ -345,16 +393,35 @@ function deleteMarkerRequest(elementId: string): SlidesBatchRequest {
   };
 }
 
+function selectRemoteMarker(
+  markers: SlideMarker[],
+  slideKey: string,
+  pageObjectId: string,
+): SlideMarker | undefined {
+  const matches = markers.filter((marker) => marker.slideKey === slideKey);
+  if (matches.length === 0) {
+    return undefined;
+  }
+
+  const expectedId = markerElementIdForPage(pageObjectId);
+  const withHistory = matches.filter((marker) => shouldKeepMarker(marker.record));
+  return (
+    withHistory.find((marker) => marker.elementId === expectedId) ??
+    withHistory.at(-1) ??
+    matches.find((marker) => marker.elementId === expectedId) ??
+    matches.at(-1)
+  );
+}
+
 export function buildMarkerDiffRequestGroups(
   localSlides: Record<string, SlideRecord>,
   remoteMarkers: SlideMarker[],
   validPageIds?: ReadonlySet<string>,
+  occupiedElementIds?: ReadonlySet<string>,
 ): SlidesBatchRequest[][] {
   const groups: SlidesBatchRequest[][] = [];
-  const remoteBySlideKey = new Map(
-    remoteMarkers.map((marker) => [marker.slideKey, marker]),
-  );
-  const handledRemote = new Set<string>();
+  const handledElementIds = new Set<string>();
+  const handledSlideKeys = new Set<string>();
 
   for (const [slideKey, localRecord] of Object.entries(localSlides)) {
     if (isIndexSlideKey(slideKey) || !isDriveSlideId(slideKey)) {
@@ -366,38 +433,49 @@ export function buildMarkerDiffRequestGroups(
       continue;
     }
 
-    const remoteMarker = remoteBySlideKey.get(slideKey);
-    handledRemote.add(slideKey);
+    handledSlideKeys.add(slideKey);
+    const remoteMarker = selectRemoteMarker(
+      remoteMarkers,
+      slideKey,
+      pageObjectId,
+    );
+    const expectedId = markerElementIdForPage(pageObjectId);
 
     if (!shouldKeepMarker(localRecord)) {
       if (remoteMarker) {
         groups.push([deleteMarkerRequest(remoteMarker.elementId)]);
+        handledElementIds.add(remoteMarker.elementId);
       }
       continue;
     }
 
     if (!remoteMarker) {
+      if (occupiedElementIds?.has(expectedId)) {
+        groups.push(updateMarkerRequests(expectedId, localRecord));
+        handledElementIds.add(expectedId);
+        continue;
+      }
       groups.push(createMarkerRequests(pageObjectId, localRecord));
+      handledElementIds.add(expectedId);
       continue;
     }
 
+    handledElementIds.add(remoteMarker.elementId);
     if (!recordsMatch(localRecord, remoteMarker.record)) {
-      groups.push(
-        updateMarkerRequests(
-          pageObjectId,
-          remoteMarker.elementId,
-          localRecord,
-        ),
-      );
+      groups.push(updateMarkerRequests(remoteMarker.elementId, localRecord));
     }
   }
 
   for (const marker of remoteMarkers) {
-    if (handledRemote.has(marker.slideKey)) {
+    if (
+      handledElementIds.has(marker.elementId) ||
+      handledSlideKeys.has(marker.slideKey)
+    ) {
       continue;
     }
 
     groups.push([deleteMarkerRequest(marker.elementId)]);
+    handledElementIds.add(marker.elementId);
   }
 
   return groups;
@@ -407,11 +485,13 @@ export function buildMarkerDiffRequests(
   localSlides: Record<string, SlideRecord>,
   remoteMarkers: SlideMarker[],
   validPageIds?: ReadonlySet<string>,
+  occupiedElementIds?: ReadonlySet<string>,
 ): SlidesBatchRequest[] {
   return buildMarkerDiffRequestGroups(
     localSlides,
     remoteMarkers,
     validPageIds,
+    occupiedElementIds,
   ).flat();
 }
 
@@ -686,4 +766,24 @@ export function buildCatalogDiffRequests(
     remoteCatalog,
     presentation,
   ).flat();
+}
+
+export function buildCatalogMarkerDeleteRequestGroups(
+  remoteCatalog: CatalogMarker | null,
+): SlidesBatchRequest[][] {
+  if (!remoteCatalog) {
+    return [];
+  }
+
+  return [[deleteMarkerRequest(remoteCatalog.elementId)]];
+}
+
+export function buildUsersMarkerDeleteRequestGroups(
+  remoteUsers: UsersMarker | null,
+): SlidesBatchRequest[][] {
+  if (!remoteUsers) {
+    return [];
+  }
+
+  return [[deleteMarkerRequest(remoteUsers.elementId)]];
 }

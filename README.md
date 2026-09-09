@@ -4,7 +4,7 @@
 
 **[Install from Chrome Web Store](https://chromewebstore.google.com/detail/mgebbidbnfnomiilkimbiplmkafccmpf)**
 
-A Chrome extension for Google Slides that lets you assign slide statuses from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via hidden marker shapes on each slide. Customize the status preset (icon, color, label, order, add/remove) from the side panel; presets sync to collaborators through a hidden catalog marker on the presentation.
+A Chrome extension for Google Slides that lets you assign slide statuses from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via hidden marker shapes on each slide. Customize the status preset (icon, color, label, order, add/remove) from the side panel; presets and collaborator emails sync through Google Drive file metadata on the presentation.
 
 
 
@@ -92,7 +92,7 @@ This creates `extension.pub.b64` (commit this) and `extension.pem` (private, git
 
 
 
-1. Create a Google Cloud project and enable **Google Slides API**
+1. Create a Google Cloud project and enable **Google Slides API** and **Google Drive API**
 
 2. Configure the OAuth consent screen (Testing mode is fine for development)
 
@@ -128,7 +128,7 @@ After publishing to the Chrome Web Store, update the OAuth client with the store
 
 
 
-The `presentations` scope allows read/write access to presentation content; the Extension only reads slide page IDs and writes small hidden marker shapes for status sync. See `CHROMEWEBSTORE.md` for listing metadata and permission justifications.
+The `presentations` scope allows read/write access to presentation content; the Extension only reads slide page IDs and writes small hidden marker shapes for status sync. The `drive.metadata` scope allows read/write of status preset and collaborator email metadata on presentations you open. See `CHROMEWEBSTORE.md` for listing metadata and permission justifications.
 
 
 
@@ -157,6 +157,7 @@ npm run zip
 - `alarms` — periodic background sync for open presentations (1 minute)
 
 - `https://slides.googleapis.com/*` — read slide structure and write status marker shapes
+- `https://www.googleapis.com/drive/v3/*` — read and write status preset and collaborator email metadata
 
 
 

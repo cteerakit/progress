@@ -2,8 +2,10 @@ import { getDeckCounts } from '../utils/counts';
 import {
   buildCatalogDiffRequests,
   buildCatalogDiffRequestGroups,
+  buildCatalogMarkerDeleteRequestGroups,
   buildMarkerDiffRequests,
   buildMarkerDiffRequestGroups,
+  buildUsersMarkerDeleteRequestGroups,
   CATALOG_MARKER_TITLE,
   decodeMarkerPayload,
   decodePresentationMetadata,
@@ -15,6 +17,15 @@ import {
   slideKeyFromObjectId,
 } from '../utils/slide-metadata';
 import {
+  buildCatalogUsersAppPropertiesPatch,
+  catalogUsersAppPropertiesEqual,
+  decodeAppPropertiesToCatalog,
+  decodeAppPropertiesToUsers,
+  driveAppPropertiesNeedWrite,
+  encodeCatalogUsersToAppProperties,
+  hasDriveCatalogOrUsers,
+} from '../utils/drive-metadata';
+import {
   bumpStatusPresetConfig,
   cloneStatusPresetConfig,
   decodeCatalogPayload,
@@ -24,16 +35,21 @@ import {
 import { reassignDeckStatus } from '../utils/status';
 import {
   appendSlideLogEntry,
+  clearSlideHistory,
   collectDeckHistory,
   decodeMarkerLogV3,
   encodeMarkerPayloadCore,
   MARKER_DESCRIPTION_MAX_CHARS,
   normalizeSlideLog,
+  prepareSlideRecord,
   truncateSlideLogToMarkerBudget,
 } from '../utils/slide-log';
 import {
+  decodeUsersDrivePayload,
   decodeUsersPayload,
+  encodeUsersDrivePayload,
   encodeUsersPayload,
+  mergeUserCatalogs,
   registerUserInCatalog,
 } from '../utils/user-catalog';
 import {
@@ -41,6 +57,7 @@ import {
   applyReadOnlyRemoteDeck,
   applyStorageDeckUpdate,
   assignIndexSlideId,
+  clearDeckHistory,
   createEmptyDeck,
   isDriveSlideId,
   mergeDeckStates,
@@ -233,6 +250,62 @@ assert(
   'markers must sit just left of the slide top edge to avoid editor scrolling',
 );
 
+const occupiedIdGroups = buildMarkerDiffRequestGroups(
+  {
+    'id.p2': { status: 'todo', updatedAt: 400 },
+  },
+  [],
+  new Set(['p2']),
+  new Set(['progress_marker_p2']),
+);
+assert(
+  occupiedIdGroups.length === 1 &&
+    occupiedIdGroups[0]?.some((request) => 'updatePageElementAltText' in request) &&
+    !occupiedIdGroups.some((group) =>
+      group.some((request) => 'createShape' in request),
+    ),
+  'must update in place when the deterministic marker id already exists',
+);
+
+const untitledMarker = decodePresentationMetadata({
+  slides: [
+    {
+      objectId: 'g3e2ddb2740b_0_1227',
+      pageElements: [
+        { objectId: 'progress_marker_g3e2ddb2740b_0_1227' },
+      ],
+    },
+  ],
+});
+assert(
+  untitledMarker.slides['id.g3e2ddb2740b_0_1227'] == null &&
+    untitledMarker.markers.some(
+      (marker) => marker.elementId === 'progress_marker_g3e2ddb2740b_0_1227',
+    ) &&
+    untitledMarker.occupiedElementIds.has('progress_marker_g3e2ddb2740b_0_1227'),
+  'an existing marker shape without alt text must still occupy its object id',
+);
+const untitledReset = buildMarkerDiffRequests(
+  {
+    'id.g3e2ddb2740b_0_1227': {
+      status: 'none',
+      updatedAt: 500,
+      log: [
+        { status: 'none', updatedAt: 500 },
+        { status: 'done', updatedAt: 400 },
+      ],
+    },
+  },
+  untitledMarker.markers,
+  new Set(['g3e2ddb2740b_0_1227']),
+  untitledMarker.occupiedElementIds,
+);
+assert(
+  untitledReset.some((request) => 'updatePageElementAltText' in request) &&
+    !untitledReset.some((request) => 'createShape' in request),
+  'reset all must not createShape over a leftover marker object id',
+);
+
 const updateRequests = buildMarkerDiffRequests(
   {
     'id.p1': { status: 'todo', updatedAt: 250 },
@@ -240,16 +313,16 @@ const updateRequests = buildMarkerDiffRequests(
   remote.markers,
 );
 assert(
-  updateRequests.length === 5 &&
-    updateRequests.some((request) => 'deleteObject' in request) &&
-    updateRequests.some((request) => 'createShape' in request) &&
+  updateRequests.length === 1 &&
+    !updateRequests.some((request) => 'deleteObject' in request) &&
+    !updateRequests.some((request) => 'createShape' in request) &&
     updateRequests.some(
       (request) =>
         'updatePageElementAltText' in request &&
         (request.updatePageElementAltText as { objectId: string })
-          .objectId === 'progress_marker_p1',
+          .objectId === 'marker-p1',
     ),
-  'diff must recreate an existing marker when local is newer',
+  'diff must update an existing marker in place when local is newer',
 );
 
 const resetWithHistory = buildMarkerDiffRequests(
@@ -266,9 +339,10 @@ const resetWithHistory = buildMarkerDiffRequests(
   remote.markers,
 );
 assert(
-  resetWithHistory.length === 5 &&
-    resetWithHistory.some((request) => 'createShape' in request),
-  'resetting to none with history must recreate the marker instead of deleting it',
+  resetWithHistory.length === 1 &&
+    resetWithHistory.some((request) => 'updatePageElementAltText' in request) &&
+    !resetWithHistory.some((request) => 'deleteObject' in request),
+  'resetting to none with history must update the marker instead of deleting it',
 );
 
 const deleteRequests = buildMarkerDiffRequests(
@@ -703,20 +777,152 @@ const historyDeck: DeckState = {
 };
 const history = collectDeckHistory(historyDeck);
 assert(
-  history.length === 3 &&
+  history.length === 2 &&
     history[0]?.updatedAt === 200 &&
     history[0]?.fromStatus === 'todo' &&
     history[0]?.status === 'done' &&
     history[0]?.slideIndex === 0 &&
-    history[1]?.updatedAt === 150 &&
+    history[1]?.updatedAt === 100 &&
     history[1]?.fromStatus === 'none' &&
-    history[1]?.status === 'in-progress' &&
-    history[1]?.slideIndex === 1 &&
-    history[2]?.updatedAt === 100 &&
-    history[2]?.fromStatus === 'none' &&
-    history[2]?.status === 'todo' &&
-    history[2]?.slideIndex === 0,
+    history[1]?.status === 'todo' &&
+    history[1]?.slideIndex === 0,
   'collectDeckHistory must dedupe alias keys and sort newest first',
+);
+
+const noOpHistoryDeck: DeckState = {
+  slides: {
+    'id.p1': {
+      status: 'none',
+      updatedAt: 500,
+      log: [{ status: 'none', updatedAt: 500, updatedBy: 0 }],
+    },
+  },
+  idsByIndex: { '0': 'id.p1' },
+};
+assert(
+  collectDeckHistory(noOpHistoryDeck).length === 0,
+  'collectDeckHistory must skip no-op none transitions',
+);
+assert(
+  prepareSlideRecord({
+    status: 'none',
+    updatedAt: 500,
+    log: [{ status: 'none', updatedAt: 500, updatedBy: 0 }],
+  }).log === undefined,
+  'prepareSlideRecord must drop attribution-only none logs',
+);
+assert(
+  collectDeckHistory({
+    slides: {
+      'id.p1': {
+        status: 'none',
+        updatedAt: 260,
+        log: [
+          { status: 'none', updatedAt: 260 },
+          { status: 'done', updatedAt: 200 },
+        ],
+      },
+    },
+    idsByIndex: { '0': 'id.p1' },
+  }).some(
+    (entry) => entry.fromStatus === 'done' && entry.status === 'none',
+  ),
+  'collectDeckHistory must still show meaningful none transitions',
+);
+
+const clearedHistoryDeck = clearDeckHistory(historyDeck);
+assert(
+  collectDeckHistory(clearedHistoryDeck).length === 0 &&
+    clearedHistoryDeck.slides['id.p1']?.status === 'done' &&
+    (clearedHistoryDeck.slides['id.p1']?.updatedAt ?? 0) > 200 &&
+    clearedHistoryDeck.slides['id.p1']?.log?.length === 0 &&
+    clearedHistoryDeck.slides['id.p2']?.status === 'in-progress' &&
+    clearedHistoryDeck.slides['id.p2']?.log?.length === 0,
+  'clearDeckHistory must strip logs while keeping current statuses',
+);
+
+const clearedMerge = mergeDeckStates(
+  clearedHistoryDeck,
+  historyDeck.slides,
+);
+assert(
+  collectDeckHistory(clearedMerge.merged).length === 0 &&
+    clearedMerge.remoteChanged === true &&
+    clearedMerge.merged.slides['id.p1']?.log?.length === 0,
+  'merge must not restore cleared history from remote markers',
+);
+
+const clearedPayload = encodeMarkerPayload(
+  clearedHistoryDeck.slides['id.p1'] ?? { status: 'done', updatedAt: 201, log: [] },
+);
+const decodedCleared = decodeMarkerPayload(clearedPayload);
+assert(
+  clearedPayload.startsWith('4:') &&
+    decodedCleared?.status === 'done' &&
+    (decodedCleared.log?.length ?? 0) === 0 &&
+    decodedCleared.historyClearedAt != null &&
+    collectDeckHistory({
+      slides: { 'id.p1': decodedCleared },
+      idsByIndex: { '0': 'id.p1' },
+    }).length === 0,
+  'cleared history must round-trip through a v4 marker payload',
+);
+
+const decodedClearedMerge = mergeDeckStates(
+  {
+    slides: { 'id.p1': decodedCleared ?? { status: 'done', updatedAt: 201, log: [] } },
+    idsByIndex: {},
+  },
+  {
+    'id.p1': historyDeck.slides['id.p1'] ?? { status: 'done', updatedAt: 200 },
+  },
+);
+assert(
+  collectDeckHistory(decodedClearedMerge.merged).length === 0,
+  'decoded cleared markers must not re-union older remote logs',
+);
+
+const clearHistoryMarkerDiff = buildMarkerDiffRequests(
+  {
+    'id.p1': clearedHistoryDeck.slides['id.p1'] ?? {
+      status: 'done',
+      updatedAt: 201,
+      log: [],
+    },
+  },
+  [
+    {
+      elementId: 'marker-p1',
+      slideKey: 'id.p1',
+      record: {
+        status: 'done',
+        updatedAt: 200,
+        log: [
+          { status: 'done', updatedAt: 200 },
+          { status: 'todo', updatedAt: 100 },
+        ],
+      },
+    },
+  ],
+);
+assert(
+  clearHistoryMarkerDiff.length === 1 &&
+    clearHistoryMarkerDiff.some(
+      (request) => 'updatePageElementAltText' in request,
+    ),
+  'clearing history must update remote markers with compact payloads',
+);
+
+assert(
+  clearSlideHistory({
+    status: 'none',
+    updatedAt: 260,
+    log: [
+      { status: 'none', updatedAt: 260 },
+      { status: 'done', updatedAt: 200 },
+    ],
+  }).log?.length === 0,
+  'clearSlideHistory must remove prior log entries',
 );
 
 const staleDeck: DeckState = {
@@ -741,7 +947,7 @@ assert(
 
 const staleMerge = mergeDeckStates(
   staleDeck,
-  { 'id.p1': { status: 'none', updatedAt: 0 } },
+  { 'id.p1': { status: 'todo', updatedAt: 100 } },
   { canEdit: true, validSlideKeys: validKeys },
 );
 assert(
@@ -805,6 +1011,111 @@ assert(
     normalizeSlideLog(decodedAttributed)[0]?.updatedBy === 1 &&
     normalizeSlideLog(decodedAttributed)[1]?.updatedBy === 0,
   'marker payload v3 must round-trip editor attribution',
+);
+
+const driveCatalog = bumpStatusPresetConfig(
+  cloneStatusPresetConfig({
+    ...DEFAULT_STATUS_PRESET_CONFIG,
+    statuses: [
+      ...DEFAULT_STATUS_PRESET_CONFIG.statuses,
+      {
+        id: 's_review',
+        label: 'Review',
+        color: '#4285f4',
+        icon: 'check_circle',
+      },
+    ],
+  }),
+);
+const driveUsers = registerUserInCatalog(
+  registerUserInCatalog(
+    { version: 1, updatedAt: 0, users: [] },
+    { email: 'alice@example.com', picture: 'https://example.com/a.png' },
+  ).catalog,
+  { email: 'bob@example.com' },
+).catalog;
+const driveProps = encodeCatalogUsersToAppProperties(driveCatalog, driveUsers);
+assert(
+  driveProps.v === '2' &&
+    hasDriveCatalogOrUsers(driveProps) &&
+    decodeAppPropertiesToCatalog(driveProps)?.statuses.some(
+      (preset) => preset.id === 's_review',
+    ) &&
+    decodeAppPropertiesToUsers(driveProps)?.users.length === 2,
+  'drive appProperties must round-trip catalog and users',
+);
+const driveUsersPayload = encodeUsersDrivePayload(driveUsers);
+assert(
+  !driveUsersPayload.includes('example.com/a.png') &&
+    decodeUsersDrivePayload(driveUsersPayload)?.users[0]?.picture === undefined,
+  'drive users payload must store emails only',
+);
+const pictureOnlyMerge = mergeUserCatalogs(
+  registerUserInCatalog(
+    { version: 1, updatedAt: 10, users: [{ email: 'alice@example.com' }] },
+    { email: 'alice@example.com', picture: 'https://example.com/a.png' },
+  ).catalog,
+  { version: 1, updatedAt: 10, users: [{ email: 'alice@example.com' }] },
+);
+assert(
+  pictureOnlyMerge.localChanged &&
+    !pictureOnlyMerge.remoteChanged,
+  'picture-only user updates must stay local',
+);
+const staleDriveProps = {
+  ...driveProps,
+  s0: 'legacy-slide-status',
+  c9: 'stale',
+};
+const drivePatch = buildCatalogUsersAppPropertiesPatch(
+  staleDriveProps,
+  driveCatalog,
+  driveUsers,
+);
+const patchedDriveProps: Record<string, string> = {
+  ...staleDriveProps,
+  ...Object.fromEntries(
+    Object.entries(drivePatch).filter(
+      (entry): entry is [string, string] => entry[1] !== null,
+    ),
+  ),
+};
+assert(
+  drivePatch.s0 === null &&
+    drivePatch.c9 === null &&
+    catalogUsersAppPropertiesEqual(patchedDriveProps, driveProps),
+  'drive patch must null stale progress keys',
+);
+assert(
+  !driveAppPropertiesNeedWrite({}, { v: '2' }) &&
+    !driveAppPropertiesNeedWrite({ v: '2' }, { v: '2' }) &&
+    driveAppPropertiesNeedWrite({}, driveProps),
+  'must not write Drive metadata just to stamp a schema version',
+);
+const legacyCatalogMarker = {
+  elementId: 'catalog-marker',
+  pageObjectId: 'p1',
+  config: driveCatalog,
+};
+const legacyUsersMarker = {
+  elementId: 'users-marker',
+  pageObjectId: 'p1',
+  catalog: driveUsers,
+};
+const catalogDelete = buildCatalogMarkerDeleteRequestGroups(legacyCatalogMarker);
+const usersDelete = buildUsersMarkerDeleteRequestGroups(legacyUsersMarker);
+const catalogDeleteRequest = catalogDelete[0]?.[0] as
+  | { deleteObject?: { objectId?: string } }
+  | undefined;
+const usersDeleteRequest = usersDelete[0]?.[0] as
+  | { deleteObject?: { objectId?: string } }
+  | undefined;
+assert(
+  catalogDelete.length === 1 &&
+    usersDelete.length === 1 &&
+    catalogDeleteRequest?.deleteObject?.objectId === 'catalog-marker' &&
+    usersDeleteRequest?.deleteObject?.objectId === 'users-marker',
+  'legacy catalog and users markers must delete by object id only',
 );
 
 console.log('deck merge tests passed');

@@ -1,5 +1,6 @@
 import {
   appendSlideLogEntry,
+  clearSlideHistory,
   mergeSlideRecords,
   slideRecordHasHistory,
   slideRecordsEqual,
@@ -26,6 +27,8 @@ export interface SlideRecord {
   status: SlideStatus;
   updatedAt: number;
   log?: SlideLogEntry[];
+  /** Drop log entries older than this timestamp when merging or displaying. */
+  historyClearedAt?: number;
 }
 
 export interface DeckState {
@@ -261,6 +264,35 @@ export function reassignDeckStatus(
 
 export function nextUpdatedAt(previous = 0, now = Math.floor(Date.now() / 1000)): number {
   return Math.max(now, previous + 1);
+}
+
+export function clearDeckHistory(deck: DeckState): DeckState {
+  const now = Math.floor(Date.now() / 1000);
+  const slides: Record<string, SlideRecord> = {};
+
+  for (const [key, record] of Object.entries(deck.slides)) {
+    const cleared = clearSlideHistory(record);
+    if (
+      cleared.log?.length === 0 &&
+      (cleared.status !== 'none' || cleared.updatedAt > 0)
+    ) {
+      const updatedAt = nextUpdatedAt(cleared.updatedAt, now);
+      slides[key] = {
+        ...cleared,
+        updatedAt,
+        historyClearedAt: updatedAt,
+        log: [],
+      };
+      continue;
+    }
+
+    slides[key] = cleared;
+  }
+
+  return {
+    slides,
+    idsByIndex: { ...deck.idsByIndex },
+  };
 }
 
 export function resetDeckStatuses(

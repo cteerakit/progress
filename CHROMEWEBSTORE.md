@@ -24,7 +24,7 @@
 
 - [ ] Register OAuth client as **Chrome extension** with published extension ID
 
-- [ ] Add `presentations` scope to OAuth consent screen and enable Google Slides API
+- [ ] Add `presentations` and `drive.metadata` scopes to OAuth consent screen and enable Google Slides API and Google Drive API
 
 - [ ] Fill data disclosure form using answers in [Data Disclosure Form](#data-disclosure-form) below
 
@@ -116,7 +116,7 @@ HOW TO USE
 
 PRIVACY
 
-Status data is stored locally in your browser. If you sign in, status labels are written as hidden marker shapes on slides in presentations you can edit. The extension does not read slide text, images, or browsing history.
+Status data is stored locally in your browser. If you sign in, status labels are written as hidden marker shapes on slides in presentations you can edit, and status presets plus collaborator emails are stored in Google Drive file metadata on the presentation. Profile photos stay in local cache. The extension does not read slide text, images, or browsing history.
 
 
 
@@ -135,6 +135,8 @@ PERMISSIONS
 • alarms — periodic background sync (once per minute) for open presentations
 
 • Google Slides API — reads slide page IDs and writes hidden status marker shapes on the active presentation only when signed in
+
+• Google Drive API — reads and writes status preset and collaborator email metadata on the active presentation only when signed in
 
 
 
@@ -341,6 +343,8 @@ Optional caption ideas (add in image editor, not required by CWS):
 | `alarms` | permissions | Runs periodic background sync (once per minute) for presentations currently open in Slides, replacing aggressive content-script polling. |
 
 | `https://slides.googleapis.com/*` | host_permissions | Reads slide structure and writes hidden status marker shapes on the active presentation so collaborators can share slide statuses. Only called when the user is signed in. API requests use a field mask limited to page IDs and marker alt-text. |
+
+| `https://www.googleapis.com/drive/v3/*` | host_permissions | Reads and writes status preset and collaborator email metadata in Drive `appProperties` on the active presentation so collaborators share the same preset catalog and history attribution. Profile photos are not written to Drive. |
 
 
 
@@ -558,9 +562,9 @@ Required before public release because the extension uses the `presentations` sc
 
 
 
-1. **Google Cloud Console** — Enable Google Slides API
+1. **Google Cloud Console** — Enable Google Slides API and Google Drive API
 
-2. **OAuth consent screen** — App name: "Progress for Google Slides"; scope: `https://www.googleapis.com/auth/presentations`
+2. **OAuth consent screen** — App name: "Progress for Google Slides"; scopes: `https://www.googleapis.com/auth/presentations`, `https://www.googleapis.com/auth/drive.metadata`
 
 3. **OAuth client** — Type: **Chrome extension**; Item ID: extension ID from Chrome Web Store (update after first upload) or from `npm run generate-extension-key` for testing
 
@@ -572,7 +576,7 @@ Required before public release because the extension uses the `presentations` sc
 
    - YouTube or written demo showing sign-in and sync on a Google Slides file
 
-   - Explanation that only slide page IDs and hidden status marker shapes are read/written, not slide text or images
+   - Explanation that only slide page IDs, hidden status marker shapes, and Drive file metadata for presets/collaborator emails are read/written, not slide text or images
 
 
 

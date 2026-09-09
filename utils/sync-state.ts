@@ -76,6 +76,8 @@ export function isGlobalSyncError(message: string): boolean {
     message === 'Sign-in cancelled' ||
     message === 'Sign-in failed' ||
     message.includes('Slides sign-in expired') ||
-    message.includes('Google Slides API is disabled')
+    message.includes('Google Slides API is disabled') ||
+    message.includes('Google Drive API is disabled') ||
+    message.includes('Drive permissions are out of date')
   );
 }

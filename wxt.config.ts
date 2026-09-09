@@ -56,12 +56,14 @@ export default defineConfig({
     host_permissions: [
       'https://docs.google.com/*',
       'https://slides.googleapis.com/*',
+      'https://www.googleapis.com/drive/v3/*',
       'https://www.googleapis.com/oauth2/v3/*',
     ],
     oauth2: {
       client_id: oauthClientId,
       scopes: [
         'https://www.googleapis.com/auth/presentations',
+        'https://www.googleapis.com/auth/drive.metadata',
         'https://www.googleapis.com/auth/userinfo.email',
         'https://www.googleapis.com/auth/userinfo.profile',
       ],

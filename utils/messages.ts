@@ -5,12 +5,14 @@ import { getChromeRuntime } from './extension-api';
 
 export type BackgroundMessage =
   | { type: 'PULL'; presentationId: string }
-  | { type: 'PUSH'; presentationId: string }
+  | { type: 'PUSH'; presentationId: string; persistRemote?: boolean }
   | { type: 'AUTH'; interactive: boolean }
   | { type: 'AUTH_STATUS' }
   | { type: 'SIGN_OUT' }
   | { type: 'WATCH'; presentationId: string }
   | { type: 'UNWATCH'; presentationId: string }
+  | { type: 'FLUSH'; presentationId: string }
+  | { type: 'CLEAR_HISTORY'; presentationId: string }
   | { type: 'LOAD_DECK'; presentationId: string }
   | { type: 'SAVE_DECK'; presentationId: string; deck: DeckState }
   | { type: 'LOAD_PRESETS'; presentationId: string }
@@ -61,8 +63,19 @@ export async function pullRemoteDeck(
 
 export async function pushLocalDeck(
   presentationId: string,
+  options: { persistRemote?: boolean } = {},
 ): Promise<BackgroundResponse> {
-  return sendBackgroundMessage({ type: 'PUSH', presentationId });
+  return sendBackgroundMessage({
+    type: 'PUSH',
+    presentationId,
+    persistRemote: options.persistRemote,
+  });
+}
+
+export async function clearPresentationHistory(
+  presentationId: string,
+): Promise<BackgroundResponse> {
+  return sendBackgroundMessage({ type: 'CLEAR_HISTORY', presentationId });
 }
 
 export async function requestAuth(interactive: boolean): Promise<BackgroundResponse> {
@@ -83,6 +96,12 @@ export async function watchPresentation(presentationId: string): Promise<void> {
 
 export async function unwatchPresentation(presentationId: string): Promise<void> {
   await sendBackgroundMessage({ type: 'UNWATCH', presentationId });
+}
+
+export async function flushPresentation(
+  presentationId: string,
+): Promise<BackgroundResponse> {
+  return sendBackgroundMessage({ type: 'FLUSH', presentationId });
 }
 
 export async function loadPresetsInTab(

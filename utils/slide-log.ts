@@ -22,6 +22,7 @@ export const MARKER_DESCRIPTION_MAX_CHARS = 1000;
 const MARKER_PAYLOAD_VERSION_V1 = '1';
 const MARKER_PAYLOAD_VERSION_V2 = '2';
 const MARKER_PAYLOAD_VERSION_V3 = '3';
+const MARKER_PAYLOAD_VERSION_V4 = '4';
 
 function markerPayloadByteLength(payload: string): number {
   return new TextEncoder().encode(payload).length;
@@ -74,6 +75,22 @@ function markerPayloadVersion(log: SlideLogEntry[]): string {
     return MARKER_PAYLOAD_VERSION_V2;
   }
   return MARKER_PAYLOAD_VERSION_V1;
+}
+
+export function encodeClearedMarkerPayload(record: SlideRecord): string {
+  const current: SlideLogEntry = {
+    status: record.status,
+    updatedAt: record.updatedAt,
+    updatedBy: record.log?.[0]?.updatedBy,
+  };
+  const clearedAt = record.historyClearedAt ?? record.updatedAt;
+  let payload = `${MARKER_PAYLOAD_VERSION_V4}:${current.status}:${encodeTimestampUser(current)}~${clearedAt.toString(36)}`;
+
+  for (const entry of (record.log ?? []).slice(1)) {
+    payload += `.${encodeLogEntryV3(entry, true)}`;
+  }
+
+  return payload;
 }
 
 export function encodeMarkerPayloadCore(log: SlideLogEntry[]): string {
@@ -178,7 +195,7 @@ export function truncateSlideLogToMarkerBudget(
 }
 
 export function normalizeSlideLog(record: SlideRecord): SlideLogEntry[] {
-  if (record.log && record.log.length > 0) {
+  if (record.log) {
     return record.log;
   }
 
@@ -190,7 +207,16 @@ export function normalizeSlideLog(record: SlideRecord): SlideLogEntry[] {
 }
 
 export function slideRecordHasHistory(record: SlideRecord): boolean {
-  return normalizeSlideLog(record).length > 0;
+  if (record.log?.length === 0) {
+    return record.status !== 'none';
+  }
+  if (record.status !== 'none') {
+    return true;
+  }
+  if (record.log && record.log.length > 0) {
+    return true;
+  }
+  return record.updatedAt > 0;
 }
 
 function slideIndexForKey(deck: DeckState, slideKey: string): number | null {
@@ -254,17 +280,59 @@ function collectCanonicalSlides(
   return slides;
 }
 
+function currentSlideEntry(record: SlideRecord): SlideLogEntry | null {
+  if (record.log?.length === 0) {
+    return record.status !== 'none' || record.updatedAt > 0
+      ? { status: record.status, updatedAt: record.updatedAt }
+      : null;
+  }
+
+  const log =
+    record.log && record.log.length > 0 ? record.log : normalizeSlideLog(record);
+  return log[0] ?? null;
+}
+
+export function clearSlideHistory(record: SlideRecord): SlideRecord {
+  if (record.log?.length === 0 && record.historyClearedAt != null) {
+    return record;
+  }
+
+  const current = currentSlideEntry(record);
+  if (!current || (current.status === 'none' && current.updatedAt === 0)) {
+    return { status: 'none', updatedAt: 0 };
+  }
+
+  return {
+    status: current.status,
+    updatedAt: current.updatedAt,
+    log: [],
+    historyClearedAt: current.updatedAt,
+  };
+}
+
 export function collectDeckHistory(deck: DeckState): DeckHistoryEntry[] {
   const entries: DeckHistoryEntry[] = [];
   const seen = new Set<string>();
 
   for (const { slideKey, index } of collectCanonicalSlides(deck)) {
-    const log = normalizeSlideLog(
-      resolveSlideRecord(deck, slideKey, index ?? undefined),
-    );
+    const record = resolveSlideRecord(deck, slideKey, index ?? undefined);
+    const log = record.log;
+    if (!log || log.length === 0) {
+      continue;
+    }
+    const clearedAt = record.historyClearedAt ?? 0;
     for (let entryIndex = 0; entryIndex < log.length; entryIndex += 1) {
       const entry = log[entryIndex];
       if (!entry) {
+        continue;
+      }
+
+      if (entry.updatedAt < clearedAt) {
+        continue;
+      }
+
+      const fromStatus = log[entryIndex + 1]?.status ?? 'none';
+      if (entry.status === fromStatus) {
         continue;
       }
 
@@ -274,7 +342,7 @@ export function collectDeckHistory(deck: DeckState): DeckHistoryEntry[] {
       }
       seen.add(dedupeKey);
       entries.push({
-        fromStatus: log[entryIndex + 1]?.status ?? 'none',
+        fromStatus,
         status: entry.status,
         updatedAt: entry.updatedAt,
         slideIndex: index,
@@ -287,6 +355,29 @@ export function collectDeckHistory(deck: DeckState): DeckHistoryEntry[] {
 }
 
 export function prepareSlideRecord(record: SlideRecord): SlideRecord {
+  if (record.historyClearedAt != null) {
+    const log = (record.log ?? []).filter(
+      (entry) => entry.updatedAt >= (record.historyClearedAt ?? 0),
+    );
+    return {
+      status: record.status,
+      updatedAt: record.updatedAt,
+      log,
+      historyClearedAt: record.historyClearedAt,
+    };
+  }
+
+  if (
+    record.log?.length === 0 &&
+    (record.status !== 'none' || record.updatedAt > 0)
+  ) {
+    return {
+      status: record.status,
+      updatedAt: record.updatedAt,
+      log: [],
+    };
+  }
+
   const log = truncateSlideLogToMarkerBudget(normalizeSlideLog(record));
   if (log.length === 0) {
     return { status: 'none', updatedAt: 0 };
@@ -301,7 +392,8 @@ export function prepareSlideRecord(record: SlideRecord): SlideRecord {
     status: current.status,
     updatedAt: current.updatedAt,
     log:
-      older.length > 0 || current.updatedBy != null
+      older.length > 0 ||
+      (current.updatedBy != null && current.status !== 'none')
         ? log
         : undefined,
   };
@@ -311,7 +403,13 @@ function shouldPersistLog(log: SlideLogEntry[]): boolean {
   if (log.length > 1) {
     return true;
   }
-  return log[0]?.updatedBy != null;
+
+  const entry = log[0];
+  if (!entry || entry.status === 'none') {
+    return false;
+  }
+
+  return entry.updatedBy != null;
 }
 
 export function unionSlideLogs(
@@ -338,14 +436,19 @@ export function appendSlideLogEntry(
   record: SlideRecord,
   entry: SlideLogEntry,
 ): SlideRecord {
+  const baseline =
+    record.log?.length === 0
+      ? [{ status: record.status, updatedAt: record.updatedAt }]
+      : normalizeSlideLog(record);
   const log = truncateSlideLogToMarkerBudget(
-    unionSlideLogs([entry], normalizeSlideLog(record)),
+    unionSlideLogs([entry], baseline),
   );
 
   return {
     status: entry.status,
     updatedAt: entry.updatedAt,
     log: shouldPersistLog(log) ? log : undefined,
+    historyClearedAt: record.historyClearedAt,
   };
 }
 
@@ -354,22 +457,48 @@ export function mergeSlideRecords(
   incoming: SlideRecord,
   onTie: 'keep-base' | 'use-incoming' = 'keep-base',
 ): SlideRecord {
-  const winner =
-    incoming.updatedAt > base.updatedAt
-      ? incoming
-      : base.updatedAt > incoming.updatedAt
-        ? base
-        : onTie === 'use-incoming'
-          ? incoming
-          : base;
+  const baseWins =
+    base.updatedAt > incoming.updatedAt ||
+    (base.updatedAt === incoming.updatedAt && onTie === 'keep-base');
+  const winner = baseWins ? base : incoming;
+  const loser = baseWins ? incoming : base;
+  const clearedAt = Math.max(
+    base.historyClearedAt ?? 0,
+    incoming.historyClearedAt ?? 0,
+  );
+
+  if (
+    (winner.log?.length === 0 || winner.historyClearedAt != null) &&
+    winner.updatedAt >= loser.updatedAt &&
+    (winner.log?.length === 0 ||
+      (winner.historyClearedAt ?? 0) >= (loser.historyClearedAt ?? 0))
+  ) {
+    const keepEmpty =
+      winner.log?.length === 0 ||
+      !(winner.log && winner.log.some((entry) => entry.updatedAt >= (winner.historyClearedAt ?? 0)));
+    if (keepEmpty) {
+      return prepareSlideRecord({
+        status: winner.status,
+        updatedAt: winner.updatedAt,
+        log: [],
+        historyClearedAt:
+          winner.historyClearedAt ??
+          (winner.log?.length === 0 ? winner.updatedAt : undefined),
+      });
+    }
+  }
+
   const log = truncateSlideLogToMarkerBudget(
-    unionSlideLogs(normalizeSlideLog(base), normalizeSlideLog(incoming)),
+    unionSlideLogs(normalizeSlideLog(base), normalizeSlideLog(incoming)).filter(
+      (entry) => clearedAt === 0 || entry.updatedAt >= clearedAt,
+    ),
   );
 
   return {
     status: winner.status,
     updatedAt: winner.updatedAt,
     log: shouldPersistLog(log) ? log : undefined,
+    historyClearedAt: clearedAt > 0 ? clearedAt : undefined,
   };
 }
 
@@ -381,18 +510,26 @@ export function slideRecordsEqual(
     return false;
   }
 
-  const leftLog = normalizeSlideLog(left);
-  const rightLog = normalizeSlideLog(right);
-  if (leftLog.length !== rightLog.length) {
+  if ((left.historyClearedAt ?? 0) !== (right.historyClearedAt ?? 0)) {
     return false;
   }
 
-  return leftLog.every(
-    (entry, index) =>
-      entry.status === rightLog[index]?.status &&
-      entry.updatedAt === rightLog[index]?.updatedAt &&
-      entry.updatedBy === rightLog[index]?.updatedBy,
-  );
+  if (left.log !== undefined || right.log !== undefined) {
+    const leftLog = left.log ?? [];
+    const rightLog = right.log ?? [];
+    if (leftLog.length !== rightLog.length) {
+      return false;
+    }
+
+    return leftLog.every(
+      (entry, index) =>
+        entry.status === rightLog[index]?.status &&
+        entry.updatedAt === rightLog[index]?.updatedAt &&
+        entry.updatedBy === rightLog[index]?.updatedBy,
+    );
+  }
+
+  return true;
 }
 
 export function decodeMarkerLog(
@@ -539,5 +676,59 @@ export function decodeMarkerLogV3(
     status,
     updatedAt: parsedHead.updatedAt,
     log: shouldPersistLog(log) ? log : undefined,
+  });
+}
+
+export function decodeMarkerLogV4(
+  statusToken: string,
+  rest: string,
+): SlideRecord | null {
+  const status = parseStatusToken(statusToken);
+  if (!status) {
+    return null;
+  }
+
+  const tilde = rest.indexOf('~');
+  if (tilde <= 0) {
+    return null;
+  }
+
+  const parsedHead = parseTimestampUser(rest.slice(0, tilde));
+  if (!parsedHead) {
+    return null;
+  }
+
+  const after = rest.slice(tilde + 1);
+  const dot = after.indexOf('.');
+  const clearedRaw = dot >= 0 ? after.slice(0, dot) : after;
+  const entryRest = dot >= 0 ? after.slice(dot + 1) : '';
+  const historyClearedAt = Number.parseInt(clearedRaw, 36);
+  if (!Number.isFinite(historyClearedAt) || historyClearedAt < 0) {
+    return null;
+  }
+
+  const log: SlideLogEntry[] = [];
+  if (entryRest) {
+    log.push({
+      status,
+      updatedAt: parsedHead.updatedAt,
+      updatedBy: parsedHead.updatedBy,
+    });
+    for (const segment of entryRest.split('.')) {
+      const entry = parseLogEntrySegment(segment, parseStatusToken);
+      if (!entry) {
+        break;
+      }
+      if (entry.updatedAt >= historyClearedAt) {
+        log.push(entry);
+      }
+    }
+  }
+
+  return prepareSlideRecord({
+    status,
+    updatedAt: parsedHead.updatedAt,
+    log,
+    historyClearedAt,
   });
 }

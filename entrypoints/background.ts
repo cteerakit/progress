@@ -14,9 +14,13 @@ import {
   setStatusPresetTemplate,
   updateSyncState,
 } from '../background/storage';
-import { persistActiveSlideState } from '../utils/active-slide';
+import {
+  persistActiveSlideState,
+  type RepublishActiveSlideMessage,
+} from '../utils/active-slide';
 import { fetchSignedInUserProfile } from '../utils/auth';
 import {
+  clearDeckHistory,
   mergeDeckStates,
   mergeIdsByIndex,
   pruneDeckToExistingSlides,
@@ -29,13 +33,21 @@ import {
   SlidesEditDeniedError,
 } from '../utils/slides-api';
 import {
-  buildCatalogDiffRequestGroups,
   buildMarkerDiffRequestGroups,
-  buildUsersDiffRequestGroups,
   decodePresentationMetadata,
   presentationPageObjectIds,
   presentationSlideKeys,
 } from '../utils/slide-metadata';
+import {
+  buildCatalogUsersAppPropertiesPatch,
+  decodeAppPropertiesToCatalog,
+  decodeAppPropertiesToUsers,
+  driveAppPropertiesNeedWrite,
+  DriveEditDeniedError,
+  encodeCatalogUsersToAppProperties,
+  fetchDriveFile,
+  updateDriveFileProperties,
+} from '../utils/drive-metadata';
 import { mergeUserCatalogs } from '../utils/user-catalog';
 import { notifyPresentationPresetsUpdated } from '../utils/preset-sync';
 import {
@@ -45,13 +57,20 @@ import {
 import { isGlobalSyncError } from '../utils/sync-state';
 import {
   ensureSyncAlarm,
+  flushAlarmPresentationId,
   getWatchedPresentations,
+  isPresentationWatched,
   registerPresentationSync,
+  scheduleDeferredFlush,
   SYNC_ALARM_NAME,
   unregisterPresentationSync,
+  WATCH_SYNC_INTERVAL_MS,
 } from '../utils/sync-registry';
 
 const presentationLocks = new Map<string, Promise<unknown>>();
+const REMOTE_PUSH_DEBOUNCE_MS = 1_000;
+const debouncedPushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let watchSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 function withPresentationLock<T>(
   presentationId: string,
@@ -178,10 +197,13 @@ async function recordSyncSuccess(presentationId: string): Promise<void> {
 async function syncDeckWithSlides(
   presentationId: string,
   token: string,
+  options: { persistRemote?: boolean } = {},
 ): Promise<boolean> {
   const presentation = await fetchPresentation(token, presentationId);
-  const canEdit = presentationCanEdit(presentation);
-  await setPresentationCanEdit(presentationId, canEdit);
+  const driveFile = await fetchDriveFile(token, presentationId);
+  const canEditSlides = presentationCanEdit(presentation);
+  const canEditDrive = driveFile.accessible && driveFile.canEdit;
+  await setPresentationCanEdit(presentationId, canEditSlides);
 
   const remote = decodePresentationMetadata(presentation);
   const validSlideKeys = presentationSlideKeys(presentation);
@@ -191,18 +213,16 @@ async function syncDeckWithSlides(
     validSlideKeys,
   );
   const localPresets = await getPresentationStatusPresets(presentationId);
-  const remotePresets = remote.catalog?.config ?? null;
+  const drivePresets = decodeAppPropertiesToCatalog(driveFile.appProperties);
+  const remotePresets =
+    drivePresets ?? remote.catalog?.config ?? null;
   let activePresets = localPresets;
   let presetsLocalChanged = false;
-  let presetsRemoteChanged = false;
 
   if (remotePresets) {
     const presetMerge = mergeStatusPresetConfigs(localPresets, remotePresets);
     activePresets = presetMerge.merged;
     presetsLocalChanged = presetMerge.localChanged;
-    presetsRemoteChanged = presetMerge.remoteChanged;
-  } else if (canEdit && localPresets.updatedAt > 0) {
-    presetsRemoteChanged = true;
   }
 
   if (presetsLocalChanged) {
@@ -211,18 +231,16 @@ async function syncDeckWithSlides(
   }
 
   const localUsers = await getPresentationUsers(presentationId);
-  const remoteUsers = remote.users?.catalog ?? null;
+  const driveUsers = decodeAppPropertiesToUsers(driveFile.appProperties);
+  const remoteUsers =
+    driveUsers ?? remote.users?.catalog ?? null;
   let activeUsers = localUsers;
   let usersLocalChanged = false;
-  let usersRemoteChanged = false;
 
   if (remoteUsers) {
     const userMerge = mergeUserCatalogs(localUsers, remoteUsers);
     activeUsers = userMerge.merged;
     usersLocalChanged = userMerge.localChanged;
-    usersRemoteChanged = userMerge.remoteChanged;
-  } else if (canEdit && localUsers.users.length > 0) {
-    usersRemoteChanged = true;
   }
 
   if (usersLocalChanged || remoteUsers) {
@@ -230,7 +248,7 @@ async function syncDeckWithSlides(
   }
 
   const { merged, localChanged } = mergeDeckStates(local, remote.slides, {
-    canEdit,
+    canEdit: canEditSlides,
     validSlideKeys,
   });
   const withIds = {
@@ -242,55 +260,73 @@ async function syncDeckWithSlides(
     Object.keys(pruned.slides).length !== Object.keys(merged.slides).length;
 
   if (localChanged || prunedIndexKeys) {
-    if (canEdit) {
+    if (canEditSlides) {
       await saveDeck(presentationId, pruned);
     } else {
       await overwriteDeckSlides(presentationId, pruned);
     }
   }
 
-  if (!canEdit) {
+  if (!canEditSlides) {
     return false;
+  }
+
+  // Writing Drive metadata or slide shapes while the editor tab is open
+  // fights Google's saver and leaves the title bar on "Saving…".
+  if (!options.persistRemote) {
+    return true;
   }
 
   const latest = pruneRedundantIndexSlides(
     pruneDeckToExistingSlides(await getDeck(presentationId), validSlideKeys),
   );
-  const { remoteChanged } = mergeDeckStates(latest, remote.slides, {
+  const pushMerge = mergeDeckStates(latest, remote.slides, {
     validSlideKeys,
   });
 
-  if (remoteChanged || presetsRemoteChanged || usersRemoteChanged) {
+  const desiredDriveProps = encodeCatalogUsersToAppProperties(
+    activePresets,
+    activeUsers,
+  );
+  const driveNeedsUpdate = driveAppPropertiesNeedWrite(
+    driveFile.appProperties,
+    desiredDriveProps,
+  );
+  if (canEditDrive && driveNeedsUpdate) {
+    try {
+      const patch = buildCatalogUsersAppPropertiesPatch(
+        driveFile.appProperties,
+        activePresets,
+        activeUsers,
+      );
+      await updateDriveFileProperties(token, presentationId, patch);
+    } catch (error) {
+      if (error instanceof DriveEditDeniedError) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  // Leave leftover catalog/users shapes in place. Deleting them while the
+  // editor is open fights Google Slides' saver and sticks the title bar on
+  // "Saving…". Drive appProperties are the source of truth once present.
+
+  if (pushMerge.remoteChanged) {
     try {
       const markerRequestGroups = buildMarkerDiffRequestGroups(
-        latest.slides,
+        pushMerge.merged.slides,
         remote.markers,
         validPageIds,
+        remote.occupiedElementIds,
       );
-      const catalogRequestGroups = buildCatalogDiffRequestGroups(
-        activePresets,
-        remote.catalog,
-        presentation,
-      );
-      const usersRequestGroups = buildUsersDiffRequestGroups(
-        activeUsers,
-        remote.users,
-        presentation,
-      );
+      if (markerRequestGroups.length === 0) {
+        return true;
+      }
       await batchUpdatePresentationGrouped(
         token,
         presentationId,
         markerRequestGroups,
-      );
-      await batchUpdatePresentationGrouped(
-        token,
-        presentationId,
-        catalogRequestGroups,
-      );
-      await batchUpdatePresentationGrouped(
-        token,
-        presentationId,
-        usersRequestGroups,
       );
     } catch (error) {
       if (error instanceof SlidesEditDeniedError) {
@@ -312,7 +348,9 @@ async function handlePull(presentationId: string): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithSlides(presentationId, token);
+        const canEdit = await syncDeckWithSlides(presentationId, token, {
+          persistRemote: false,
+        });
         await recordSyncSuccess(presentationId);
         return canEdit;
       });
@@ -327,11 +365,18 @@ async function handlePull(presentationId: string): Promise<BackgroundResponse> {
   });
 }
 
-async function handlePush(presentationId: string): Promise<BackgroundResponse> {
+async function handlePush(
+  presentationId: string,
+  options: { persistRemote?: boolean } = {},
+): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
+      const persistRemote =
+        options.persistRemote ?? !(await isPresentationWatched(presentationId));
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithSlides(presentationId, token);
+        const canEdit = await syncDeckWithSlides(presentationId, token, {
+          persistRemote,
+        });
         await recordSyncSuccess(presentationId);
         return canEdit;
       });
@@ -339,6 +384,38 @@ async function handlePush(presentationId: string): Promise<BackgroundResponse> {
       return { ok: true, signedIn: true, canEdit };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Push failed';
+      const { signedIn } = await recordSyncFailure(presentationId, message);
+
+      return { ok: false, error: message, signedIn };
+    }
+  });
+}
+
+async function handleClearHistory(
+  presentationId: string,
+): Promise<BackgroundResponse> {
+  return withPresentationLock(presentationId, async () => {
+    try {
+      const cleared = clearDeckHistory(await getDeck(presentationId));
+      await overwriteDeckSlides(presentationId, cleared);
+
+      const canEdit = await withAuthToken(false, async (token) => {
+        const canEdit = await syncDeckWithSlides(presentationId, token, {
+          persistRemote: true,
+        });
+        await recordSyncSuccess(presentationId);
+        return canEdit;
+      });
+
+      return {
+        ok: true,
+        signedIn: true,
+        canEdit,
+        deck: await getDeck(presentationId),
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Clear history failed';
       const { signedIn } = await recordSyncFailure(presentationId, message);
 
       return { ok: false, error: message, signedIn };
@@ -461,6 +538,48 @@ async function syncWatchedPresentations(): Promise<void> {
   }
 }
 
+function scheduleDebouncedRemotePush(presentationId: string): void {
+  const existing = debouncedPushTimers.get(presentationId);
+  if (existing != null) {
+    clearTimeout(existing);
+  }
+
+  debouncedPushTimers.set(
+    presentationId,
+    setTimeout(() => {
+      debouncedPushTimers.delete(presentationId);
+      void handlePush(presentationId, { persistRemote: true });
+    }, REMOTE_PUSH_DEBOUNCE_MS),
+  );
+}
+
+function scheduleWatchSyncLoop(): void {
+  if (watchSyncTimer != null) {
+    return;
+  }
+
+  watchSyncTimer = setTimeout(() => {
+    watchSyncTimer = null;
+    void (async () => {
+      try {
+        await syncWatchedPresentations();
+      } finally {
+        const watched = await getWatchedPresentations();
+        if (watched.length > 0) {
+          scheduleWatchSyncLoop();
+        }
+      }
+    })();
+  }, WATCH_SYNC_INTERVAL_MS);
+}
+
+async function ensureWatchSyncLoop(): Promise<void> {
+  const watched = await getWatchedPresentations();
+  if (watched.length > 0) {
+    scheduleWatchSyncLoop();
+  }
+}
+
 async function enableSidePanelOnActionClick(): Promise<void> {
   if (!browser.sidePanel?.setPanelBehavior) {
     return;
@@ -473,10 +592,72 @@ async function enableSidePanelOnActionClick(): Promise<void> {
   }
 }
 
+const REPUBLISH_ACTIVE_SLIDE: RepublishActiveSlideMessage = {
+  type: 'REPUBLISH_ACTIVE_SLIDE',
+};
+
+function isSlidesPresentationUrl(url?: string): boolean {
+  return Boolean(url?.includes('/presentation/d/'));
+}
+
+async function requestActiveSlideRepublish(tabId: number): Promise<void> {
+  if (!browser.tabs?.sendMessage) {
+    return;
+  }
+
+  try {
+    await browser.tabs.sendMessage(tabId, REPUBLISH_ACTIVE_SLIDE);
+  } catch {
+    // The content script may not be ready yet.
+  }
+}
+
+async function requestActiveSlideRepublishForWindow(
+  windowId: number,
+): Promise<void> {
+  if (!browser.tabs?.query) {
+    return;
+  }
+
+  const tabs = await browser.tabs.query({ active: true, windowId });
+  const tab = tabs[0];
+  if (tab?.id && isSlidesPresentationUrl(tab.url)) {
+    await requestActiveSlideRepublish(tab.id);
+  }
+}
+
+function registerActiveSlideTabListeners(): void {
+  if (browser.tabs?.onActivated) {
+    browser.tabs.onActivated.addListener(({ tabId }) => {
+      void requestActiveSlideRepublish(tabId);
+    });
+  }
+
+  if (browser.tabs?.onUpdated) {
+    browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      if (!tab.active) {
+        return;
+      }
+
+      if (changeInfo.url || changeInfo.status === 'complete') {
+        void requestActiveSlideRepublish(tabId);
+      }
+    });
+  }
+
+  if (browser.sidePanel?.onOpened) {
+    browser.sidePanel.onOpened.addListener(({ windowId }) => {
+      void requestActiveSlideRepublishForWindow(windowId);
+    });
+  }
+}
+
 export default defineBackground(() => {
   void enableSidePanelOnActionClick();
+  registerActiveSlideTabListeners();
   void ensureSyncAlarm();
   void handleAuthStatus();
+  void ensureWatchSyncLoop();
   void (async () => {
     const state = await getSyncState();
     if (state.error && !isGlobalSyncError(state.error)) {
@@ -485,6 +666,17 @@ export default defineBackground(() => {
   })();
 
   browser.alarms.onAlarm.addListener((alarm) => {
+    const flushPresentationId = flushAlarmPresentationId(alarm.name);
+    if (flushPresentationId) {
+      void (async () => {
+        if (await isPresentationWatched(flushPresentationId)) {
+          return;
+        }
+        await handlePush(flushPresentationId, { persistRemote: true });
+      })();
+      return;
+    }
+
     if (alarm.name !== SYNC_ALARM_NAME) {
       return;
     }
@@ -502,7 +694,9 @@ export default defineBackground(() => {
             response = await handlePull(message.presentationId);
             break;
           case 'PUSH':
-            response = await handlePush(message.presentationId);
+            response = await handlePush(message.presentationId, {
+              persistRemote: message.persistRemote,
+            });
             break;
           case 'AUTH':
             response = await handleAuth(message.interactive);
@@ -515,11 +709,25 @@ export default defineBackground(() => {
             break;
           case 'WATCH':
             await registerPresentationSync(message.presentationId);
+            scheduleWatchSyncLoop();
             response = { ok: true };
             break;
           case 'UNWATCH':
             await unregisterPresentationSync(message.presentationId);
             response = { ok: true };
+            break;
+          case 'FLUSH': {
+            const remaining = await unregisterPresentationSync(
+              message.presentationId,
+            );
+            if (remaining === 0) {
+              await scheduleDeferredFlush(message.presentationId);
+            }
+            response = { ok: true };
+            break;
+          }
+          case 'CLEAR_HISTORY':
+            response = await handleClearHistory(message.presentationId);
             break;
           case 'LOAD_DECK':
             response = {
@@ -531,6 +739,7 @@ export default defineBackground(() => {
             await withPresentationLock(message.presentationId, () =>
               saveDeck(message.presentationId, message.deck),
             );
+            scheduleDebouncedRemotePush(message.presentationId);
             response = { ok: true };
             break;
           case 'LOAD_PRESETS':

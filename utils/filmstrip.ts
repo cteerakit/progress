@@ -514,8 +514,9 @@ export function getPresentationSlideCount(
 
 export function findTitleBarAnchor(): HTMLElement | null {
   const selectors = [
-    '#docs-save-indicator-badge',
+    '#docs-save-indicator-container',
     '.docs-save-indicator-container',
+    '#docs-save-indicator-badge',
     '#docs-save-indicator-id',
   ];
 

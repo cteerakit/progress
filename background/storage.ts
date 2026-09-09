@@ -180,7 +180,7 @@ export async function getPresentationStatusPresets(
   if (cached) {
     return validateStatusPresetConfig(cached);
   }
-  return cloneStatusPresetConfig(await getStatusPresetTemplate());
+  return cloneStatusPresetConfig(DEFAULT_STATUS_PRESET_CONFIG);
 }
 
 export async function setPresentationStatusPresets(

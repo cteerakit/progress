@@ -25,16 +25,19 @@ import {
   CHIP_OVERLAY_CLASS,
   type ThumbnailInfo,
 } from '../utils/filmstrip';
-import { setActiveSlideState } from '../utils/active-slide';
+import {
+  isRepublishActiveSlideMessage,
+  setActiveSlideState,
+} from '../utils/active-slide';
 import {
   pullRemoteDeck,
-  pushLocalDeck,
   requestAuth,
   getAuthStatus,
   loadPresetsInTab,
   slideIdFromHash,
   watchPresentation,
   unwatchPresentation,
+  flushPresentation,
 } from '../utils/messages';
 import {
   loadDeckInTab,
@@ -224,6 +227,10 @@ export default defineContentScript({
     };
 
     const publishActiveSlide = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
       const selected = getSelectedThumbnailInfo(thumbnails);
       void setActiveSlideState(
         selected
@@ -390,11 +397,6 @@ export default defineContentScript({
       });
       refreshUi();
       await persistLatestDeck();
-      await persistChain;
-      const pushResult = await pushLocalDeck(presentationId);
-      await applyPullResult(pushResult);
-      userCatalog = await getPresentationUsers(presentationId);
-      refreshUi();
     };
 
     const applyPullResult = async (
@@ -498,11 +500,6 @@ export default defineContentScript({
         deck = resetDeckStatuses(deck, await resolveEditorUserIndex());
         refreshUi();
         await persistLatestDeck();
-        await persistChain;
-        const pushResult = await pushLocalDeck(presentationId);
-        await applyPullResult(pushResult);
-        userCatalog = await getPresentationUsers(presentationId);
-        refreshUi();
       },
     );
 
@@ -791,8 +788,25 @@ export default defineContentScript({
       ],
     });
 
-    const titleObserver = new MutationObserver(() => {
-      mountBadge();
+    const titleObserver = new MutationObserver((mutations) => {
+      const relevant = mutations.some((mutation) => {
+        if (isExtensionUi(mutation.target)) {
+          return false;
+        }
+        if (mutation.type === 'childList') {
+          const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
+          if (
+            nodes.length > 0 &&
+            nodes.every((node) => isExtensionUi(node))
+          ) {
+            return false;
+          }
+        }
+        return true;
+      });
+      if (relevant) {
+        mountBadge();
+      }
     });
 
     const titleRoot =
@@ -850,6 +864,11 @@ export default defineContentScript({
 
     document.addEventListener('visibilitychange', onVisibilityChange);
 
+    const onPageHide = () => {
+      void persistChain.then(() => flushPresentation(presentationId));
+    };
+    window.addEventListener('pagehide', onPageHide);
+
     await watchPresentation(presentationId);
 
     const unwatchDecks = onDecksChangedInTab((decks) => {
@@ -875,7 +894,12 @@ export default defineContentScript({
       userCatalog = nextUsers;
     });
 
-    const onPresetsUpdatedMessage = (message: unknown) => {
+    const onRuntimeMessage = (message: unknown) => {
+      if (isRepublishActiveSlideMessage(message)) {
+        publishActiveSlide();
+        return;
+      }
+
       if (
         !isPresetsUpdatedMessage(message) ||
         message.presentationId !== presentationId
@@ -886,7 +910,7 @@ export default defineContentScript({
       applyPresetConfig(message.presets);
     };
 
-    browser.runtime.onMessage.addListener(onPresetsUpdatedMessage);
+    browser.runtime.onMessage.addListener(onRuntimeMessage);
 
     const unwatchSync = onSyncStateChangedInTab((state) => {
       const wasReady = isSyncReady(syncState, presentationId);
@@ -914,11 +938,12 @@ export default defineContentScript({
       scrollContainer?.removeEventListener('scroll', repositionChips);
       window.removeEventListener('hashchange', onHashChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
       void unwatchPresentation(presentationId);
       unwatchDecks();
       unwatchPresets();
       unwatchUsers();
-      browser.runtime.onMessage.removeListener(onPresetsUpdatedMessage);
+      browser.runtime.onMessage.removeListener(onRuntimeMessage);
       unwatchSync();
     });
     } catch (error) {

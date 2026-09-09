@@ -17,7 +17,8 @@ The Extension adds slide status labels inside Google Slides. By default, status 
 When you use the Extension, the following information is stored in `chrome.storage.local` on your device:
 
 - **Slide statuses** — The status you assign to each slide (using built-in or custom status ids), the internal slide identifier, and a timestamp of when the status was last changed. When signed in, a compact history of prior status changes for each slide may also be stored locally and in marker alt-text.
-- **Status preset configuration** — Your customized status labels, colors, icons, order, and which status counts as complete. This is stored locally and, when signed in, in a hidden catalog marker on the presentation so collaborators see the same preset.
+- **Status preset configuration** — Your customized status labels, colors, icons, order, and which status counts as complete. This is stored locally and, when signed in, in Google Drive file metadata on the presentation so collaborators see the same preset.
+- **Collaborator email list** — When signed in, the extension stores collaborator email addresses in Drive file metadata so status history can show who made each change. Profile photos are cached locally on your device and are not written to Drive.
 - **Presentation identifiers** — Google Slides presentation IDs for decks where you have used the Extension, so your statuses can be loaded again when you reopen a file.
 - **Sync state** — Whether you are signed in, when the last sync occurred, and any recent sync error message shown in the popup.
 
@@ -25,12 +26,13 @@ This local data is used only to display status chips, the title-bar progress bad
 
 ### Data sent to Google when you sign in
 
-If you click **Sign in**, the Extension uses Google OAuth through Chrome's `identity` API and the Google Slides API to sync slide statuses with collaborators:
+If you click **Sign in**, the Extension uses Google OAuth through Chrome's `identity` API, the Google Slides API, and the Google Drive API to sync slide statuses with collaborators:
 
-- **Authentication** — Google handles sign-in. The Extension requests an OAuth token with the `presentations` scope so it can read slide structure and write status marker shapes on presentations you can edit. We do not receive or store your Google account password.
+- **Authentication** — Google handles sign-in. The Extension requests OAuth tokens with the `presentations` and `drive.metadata` scopes so it can read slide structure, write status marker shapes on presentations you can edit, and read/write preset and collaborator metadata on presentations you open. We do not receive or store your Google account password.
 - **Slide status markers** — When signed in, each assigned status is stored on its slide as a small hidden shape with alt-text metadata (`progress.slide-status`). The payload includes the current status id, update timestamp, and a compact history of prior status changes keyed to that slide's page ID. Collaborators with edit access to the same presentation can see these statuses and history through the Extension.
-- **Status preset catalog** — When signed in, customized status presets are stored as a hidden catalog marker (`progress.status-presets`) on a slide in the presentation. The catalog includes status labels, colors, icons, order, and which status counts toward completion.
-- **Presentation access** — The Extension reads and updates marker shapes only on presentations you open in Google Slides while using the Extension. API requests use a field mask limited to slide page IDs and marker alt-text; the Extension does not read or modify slide text, images, or speaker notes.
+- **Status preset catalog** — When signed in, customized status presets are stored in Google Drive file metadata (`appProperties`) on the presentation. The catalog includes status labels, colors, icons, order, and which status counts toward completion.
+- **Collaborator email list** — When signed in, collaborator email addresses are stored in the same Drive file metadata so status history can attribute changes. Profile photo URLs are cached locally and are not written to Drive.
+- **Presentation access** — The Extension reads and updates marker shapes and Drive file metadata only on presentations you open in Google Slides while using the Extension. Slides API requests use a field mask limited to slide page IDs and marker alt-text; the Extension does not read or modify slide text, images, or speaker notes.
 
 ### Data we do not collect
 
@@ -61,6 +63,8 @@ We do not use your data for advertising, creditworthiness, profiling, or any pur
 |------|----------|------|
 | Slide statuses and presentation cache | Your browser (`chrome.storage.local`) | Always, while the Extension is installed |
 | Slide status markers | Hidden shapes on each slide in the presentation | Only when you are signed in and sync |
+| Status presets and collaborator emails | Google Drive file metadata on the presentation | Only when you are signed in and sync |
+| Profile photos for collaborators | Your browser (`chrome.storage.local`) | While cached locally |
 | OAuth token | Managed by Chrome / Google | While you remain signed in |
 
 The Extension does not operate its own servers and does not store your data on developer-controlled infrastructure.
@@ -71,6 +75,7 @@ When you sign in, the Extension communicates with:
 
 - **Google OAuth / Chrome Identity API** — For authentication. See [Google Privacy Policy](https://policies.google.com/privacy).
 - **Google Slides API** — To read slide page IDs and write status marker shapes. See [Google API Terms of Service](https://developers.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
+- **Google Drive API** — To read and write status preset and collaborator email metadata on presentations you open. See [Google API Terms of Service](https://developers.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
 
 We do not share your data with any other third parties.
 

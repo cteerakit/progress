@@ -33,7 +33,17 @@
 
       <section id="history-view" class="view" aria-labelledby="history-heading">
         <div class="history-header">
-          <h2 id="history-heading" class="section-title">Status history</h2>
+          <div class="history-header-row">
+            <h2 id="history-heading" class="section-title">Status history</h2>
+            <button
+              type="button"
+              id="history-clear"
+              class="button button-secondary history-clear"
+              hidden
+            >
+              Clear history
+            </button>
+          </div>
           <p id="history-summary" class="history-summary"></p>
         </div>
         <ol id="history-list" class="history-list" hidden></ol>

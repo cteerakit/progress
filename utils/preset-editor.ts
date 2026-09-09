@@ -629,11 +629,25 @@ export function mountPresetEditor(
 
   return {
     setConfig(config) {
-      draft = cloneStatusPresetConfig(config);
+      if (openPickerStatusId !== null) {
+        return;
+      }
+
+      const next = validateStatusPresetConfig(config);
+      const current = validateStatusPresetConfig(draft);
+      if (JSON.stringify(next) === JSON.stringify(current)) {
+        return;
+      }
+
+      draft = cloneStatusPresetConfig(next);
       renderRows();
       setControlsDisabled();
     },
     setEditable(nextEditable) {
+      if (editable === nextEditable) {
+        return;
+      }
+
       editable = nextEditable;
       setIntroText();
       closeIconPicker();

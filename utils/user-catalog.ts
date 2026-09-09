@@ -33,6 +33,48 @@ export function encodeUsersPayload(catalog: UserCatalog): string {
   });
 }
 
+export function encodeUsersDrivePayload(catalog: UserCatalog): string {
+  return JSON.stringify({
+    v: catalog.version,
+    u: catalog.updatedAt,
+    users: catalog.users.map((user) => user.email),
+  });
+}
+
+export function decodeUsersDrivePayload(
+  description: string | null | undefined,
+): UserCatalog | null {
+  if (!description) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(description) as {
+      v?: number;
+      u?: number;
+      users?: string[];
+    };
+
+    if (!parsed.users || !Array.isArray(parsed.users)) {
+      return null;
+    }
+
+    const users = parsed.users
+      .map((email) => ({
+        email: email.trim(),
+      }))
+      .filter((user) => user.email.length > 0);
+
+    return {
+      version: parsed.v ?? 1,
+      updatedAt: parsed.u ?? 0,
+      users,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function decodeUsersPayload(
   description: string | null | undefined,
 ): UserCatalog | null {
@@ -121,7 +163,6 @@ export function registerUserInCatalog(
     return {
       catalog: {
         ...catalog,
-        updatedAt: Math.floor(Date.now() / 1000),
         users,
       },
       userIndex: existingIndex,
@@ -160,19 +201,20 @@ export function mergeUserCatalogs(
     merged = registerUserInCatalog(merged, localUser).catalog;
   }
 
-  const mergedPayload = encodeUsersPayload({
+  const mergedCatalog = {
     ...merged,
     updatedAt: Math.max(local.updatedAt, remote.updatedAt, merged.updatedAt),
-  });
+  };
+  const mergedPayload = encodeUsersPayload(mergedCatalog);
   const localPayload = encodeUsersPayload(local);
   const remotePayload = encodeUsersPayload(remote);
+  const mergedDrivePayload = encodeUsersDrivePayload(mergedCatalog);
+  const localDrivePayload = encodeUsersDrivePayload(local);
+  const remoteDrivePayload = encodeUsersDrivePayload(remote);
 
   return {
-    merged: {
-      ...merged,
-      updatedAt: Math.max(local.updatedAt, remote.updatedAt, merged.updatedAt),
-    },
+    merged: mergedCatalog,
     localChanged: mergedPayload !== localPayload,
-    remoteChanged: mergedPayload !== remotePayload,
+    remoteChanged: mergedDrivePayload !== remoteDrivePayload,
   };
 }
