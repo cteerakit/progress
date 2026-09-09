@@ -109,6 +109,66 @@ export function parseSlideId(raw: string | null | undefined): string | null {
   return isDriveSlideId(prefixed) ? prefixed : null;
 }
 
+/** Prefer the live filmstrip page id; never let a stale index mapping win. */
+export function pickSlideKey(
+  dataId: string | null | undefined,
+  index: number,
+  idsByIndex: Record<string, string>,
+  hashId: string | null = null,
+): string {
+  if (dataId && isDriveSlideId(dataId)) {
+    return dataId;
+  }
+  if (hashId && isDriveSlideId(hashId)) {
+    return hashId;
+  }
+  const mappedId = idsByIndex[String(index)];
+  if (mappedId && isDriveSlideId(mappedId)) {
+    return mappedId;
+  }
+  return indexSlideKey(index);
+}
+
+/** Map index → slide id, ensuring each Drive id belongs to at most one index. */
+export function assignIndexSlideId(
+  idsByIndex: Record<string, string>,
+  index: number,
+  slideId: string,
+): boolean {
+  const key = String(index);
+  let changed = idsByIndex[key] !== slideId;
+
+  for (const [idx, id] of Object.entries(idsByIndex)) {
+    if (idx !== key && id === slideId) {
+      delete idsByIndex[idx];
+      changed = true;
+    }
+  }
+
+  idsByIndex[key] = slideId;
+  return changed;
+}
+
+export function uniqueIndexMappings(
+  idsByIndex: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const ownedBy = new Map<string, string>();
+
+  for (const [index, slideId] of Object.entries(idsByIndex)) {
+    if (isDriveSlideId(slideId)) {
+      const previous = ownedBy.get(slideId);
+      if (previous !== undefined) {
+        delete result[previous];
+      }
+      ownedBy.set(slideId, index);
+    }
+    result[index] = slideId;
+  }
+
+  return result;
+}
+
 export function parseStatusCode(code: string): SlideStatus | null {
   return CODE_TO_STATUS[code] ?? null;
 }
@@ -150,7 +210,7 @@ export function resolveSlideRecord(
   if (typeof index === 'number' && Number.isFinite(index)) {
     keys.add(indexSlideKey(index));
     const mapped = deck.idsByIndex[String(index)];
-    if (mapped) {
+    if (mapped && (!isDriveSlideId(slideKey) || mapped === slideKey)) {
       keys.add(mapped);
     }
   } else if (slideKey.startsWith('index:')) {
@@ -215,7 +275,7 @@ export function mergeSlideMaps(
 
 export function pruneRedundantIndexSlides(deck: DeckState): DeckState {
   const slides = { ...deck.slides };
-  const idsByIndex = { ...deck.idsByIndex };
+  const idsByIndex = uniqueIndexMappings({ ...deck.idsByIndex });
 
   for (const [index, slideId] of Object.entries(idsByIndex)) {
     if (!slideId || slideId.startsWith('index:')) {

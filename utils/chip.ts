@@ -334,6 +334,7 @@ export function createStatusChip(
 
   host.setSlideKey = (nextKey) => {
     currentKey = nextKey;
+    host.dataset.slideKey = nextKey;
   };
   host.setStatus = (nextStatus) => {
     currentStatus = nextStatus;

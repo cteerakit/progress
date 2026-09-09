@@ -47,6 +47,7 @@ import {
   canEditPresentation,
 } from '../utils/sync-state';
 import {
+  assignIndexSlideId,
   applyStorageDeckUpdate,
   applyReadOnlyRemoteDeck,
   cloneDeck,
@@ -223,51 +224,35 @@ export default defineContentScript({
     const rememberSelectedSlideIds = async () => {
       if (!isSyncReady(syncState, presentationId)) return;
       const hashId = slideIdFromHash(window.location.hash);
-      if (!hashId) return;
+      if (!hashId || !isDriveSlideId(hashId)) return;
 
       let changed = false;
 
       for (const info of thumbnails) {
-        const selected =
-          info.element.getAttribute('aria-selected') === 'true' ||
-          info.element.classList.contains('punch-filmstrip-selected') ||
-          info.element.classList.contains('goog-option-selected');
+        if (info.slideKey !== hashId) {
+          continue;
+        }
 
-        if (selected && isDriveSlideId(hashId)) {
-          if (deck.idsByIndex[String(info.index)] !== hashId) {
-            deck.idsByIndex[String(info.index)] = hashId;
+        if (assignIndexSlideId(deck.idsByIndex, info.index, hashId)) {
+          changed = true;
+        }
+
+        const indexKey = indexSlideKey(info.index);
+        const fromIndex = deck.slides[indexKey];
+        if (fromIndex) {
+          const existing = deck.slides[hashId];
+          if (
+            !existing ||
+            fromIndex.updatedAt > existing.updatedAt ||
+            (fromIndex.updatedAt === existing.updatedAt &&
+              existing.status === 'none' &&
+              fromIndex.status !== 'none')
+          ) {
+            deck.slides[hashId] = fromIndex;
             changed = true;
           }
-
-          const indexKey = indexSlideKey(info.index);
-          const fromIndex = deck.slides[indexKey];
-          const fromSlideKey =
-            info.slideKey !== hashId ? deck.slides[info.slideKey] : undefined;
-          const source =
-            fromIndex && fromSlideKey
-              ? fromIndex.updatedAt >= fromSlideKey.updatedAt
-                ? fromIndex
-                : fromSlideKey
-              : (fromIndex ?? fromSlideKey);
-
-          if (source) {
-            const existing = deck.slides[hashId];
-            if (
-              !existing ||
-              source.updatedAt > existing.updatedAt ||
-              (source.updatedAt === existing.updatedAt &&
-                existing.status === 'none' &&
-                source.status !== 'none')
-            ) {
-              deck.slides[hashId] = source;
-              changed = true;
-            }
-          }
-
-          if (fromIndex) {
-            delete deck.slides[indexKey];
-            changed = true;
-          }
+          delete deck.slides[indexKey];
+          changed = true;
         }
       }
 
@@ -290,14 +275,13 @@ export default defineContentScript({
         thumbnailIndex != null
           ? deck.idsByIndex[String(thumbnailIndex)]
           : undefined;
-      const resolvedKey =
-        mappedId && isDriveSlideId(mappedId)
-          ? mappedId
-          : isDriveSlideId(slideKey)
-            ? slideKey
-            : info && isDriveSlideId(info.slideKey)
-              ? info.slideKey
-              : slideKey;
+      const resolvedKey = isDriveSlideId(slideKey)
+        ? slideKey
+        : info && isDriveSlideId(info.slideKey)
+          ? info.slideKey
+          : mappedId && isDriveSlideId(mappedId)
+            ? mappedId
+            : slideKey;
 
       const previous = resolveSlideRecord(
         deck,
@@ -306,7 +290,7 @@ export default defineContentScript({
       ).updatedAt;
 
       if (thumbnailIndex != null && isDriveSlideId(resolvedKey)) {
-        deck.idsByIndex[String(thumbnailIndex)] = resolvedKey;
+        assignIndexSlideId(deck.idsByIndex, thumbnailIndex, resolvedKey);
         delete deck.slides[indexSlideKey(thumbnailIndex)];
       }
 
@@ -453,9 +437,7 @@ export default defineContentScript({
           continue;
         }
 
-        const current = deck.idsByIndex[String(info.index)];
-        if (!current || !isDriveSlideId(current)) {
-          deck.idsByIndex[String(info.index)] = info.slideKey;
+        if (assignIndexSlideId(deck.idsByIndex, info.index, info.slideKey)) {
           idsChanged = true;
         }
       }
@@ -680,7 +662,13 @@ export default defineContentScript({
       subtree: true,
       attributes: true,
       attributeOldValue: true,
-      attributeFilter: ['aria-selected', 'aria-setsize', 'class', 'height'],
+      attributeFilter: [
+        'aria-selected',
+        'aria-setsize',
+        'class',
+        'height',
+        'data-slide-page-id',
+      ],
     });
 
     const titleObserver = new MutationObserver(() => {

@@ -7,11 +7,14 @@ import {
   applyLocalDeckSave,
   applyReadOnlyRemoteDeck,
   applyStorageDeckUpdate,
+  assignIndexSlideId,
   createEmptyDeck,
   isDriveSlideId,
   nextUpdatedAt,
+  pickSlideKey,
   pruneRedundantIndexSlides,
   resolveSlideRecord,
+  uniqueIndexMappings,
   type DeckState,
   type SlideRecord,
 } from '../utils/status';
@@ -154,6 +157,76 @@ const viewerApplied = applyReadOnlyRemoteDeck(viewerLocal, {
 assert(
   viewerApplied.slides['id.p1']?.status === 'todo',
   'view-only storage apply must not keep newer local status edits',
+);
+
+assert(
+  pickSlideKey('id.greal35', 25, { '25': 'id.gstale' }) === 'id.greal35',
+  'live filmstrip page id must win over a stale index mapping',
+);
+assert(
+  pickSlideKey(null, 25, { '25': 'id.gmapped' }) === 'id.gmapped',
+  'index mapping is used when the thumbnail has no page id',
+);
+assert(
+  pickSlideKey(null, 25, {}, 'id.ghash') === 'id.ghash',
+  'selected hash id is used when there is no live page id',
+);
+assert(
+  pickSlideKey(null, 25, {}) === 'index:25',
+  'index key is the last-resort identity',
+);
+
+const leaked: DeckState = {
+  slides: {
+    'id.greal35': { status: 'todo', updatedAt: 10 },
+    'id.gstale': { status: 'in-progress', updatedAt: 99 },
+  },
+  idsByIndex: { '34': 'id.gstale' },
+};
+assert(
+  resolveSlideRecord(leaked, 'id.greal35', 34).status === 'todo',
+  'a conflicting index mapping must not steal another slide\'s status',
+);
+
+const dups = uniqueIndexMappings({
+  '25': 'id.gshared',
+  '34': 'id.greal',
+  '92': 'id.gshared',
+  '99': 'id.gshared',
+});
+assert(
+  dups['34'] === 'id.greal' &&
+    dups['99'] === 'id.gshared' &&
+    dups['25'] == null &&
+    dups['92'] == null,
+  'duplicate index mappings must collapse to one index per slide id',
+);
+
+const ids: Record<string, string> = {
+  '25': 'id.gshared',
+  '92': 'id.gshared',
+};
+assert(
+  assignIndexSlideId(ids, 34, 'id.gshared') === true &&
+    ids['34'] === 'id.gshared' &&
+    ids['25'] == null &&
+    ids['92'] == null,
+  'assigning a live id must unbind it from other indices',
+);
+
+const savedDups: DeckState = {
+  slides: { 'id.gshared': { status: 'in-progress', updatedAt: 50 } },
+  idsByIndex: { '25': 'id.gshared', '92': 'id.gshared', '99': 'id.gshared' },
+};
+const afterDedupe = applyLocalDeckSave(savedDups, {
+  slides: { 'id.greal35': { status: 'todo', updatedAt: 51 } },
+  idsByIndex: { '34': 'id.greal35' },
+});
+assert(
+  afterDedupe.idsByIndex['34'] === 'id.greal35' &&
+    Object.values(afterDedupe.idsByIndex).filter((id) => id === 'id.gshared')
+      .length === 1,
+  'saving live thumbnail ids must not keep duplicate mappings',
 );
 
 console.log('deck merge tests passed');

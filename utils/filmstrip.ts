@@ -1,5 +1,11 @@
 import { slideIdFromHash } from './messages';
-import { indexSlideKey, isDriveSlideId, parseSlideId, type DeckState } from './status';
+import {
+  assignIndexSlideId,
+  parseSlideId,
+  pickSlideKey,
+  uniqueIndexMappings,
+  type DeckState,
+} from './status';
 
 const FILMSTRIP_ROOT_SELECTORS = [
   '.punch-filmstrip-scroll',
@@ -23,6 +29,26 @@ export interface ThumbnailInfo {
   element: Element;
   index: number;
   slideKey: string;
+}
+
+function parsePositiveInt(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function pageIndexFromLabel(
+  text: string | null | undefined,
+): number | null {
+  const parsed = parsePositiveInt(text);
+  return parsed ? parsed - 1 : null;
+}
+
+function slideIndexFromPageNumber(element: Element): number | null {
+  const label = element.querySelector(
+    '.punch-filmstrip-thumbnail-pagenumber',
+  );
+  return pageIndexFromLabel(label?.textContent?.trim());
 }
 
 export function getPresentationIdFromLocation(): string | null {
@@ -104,21 +130,7 @@ export function resolveSlideKeyForThumbnail(
   idsByIndex: Record<string, string>,
   hashId: string | null = null,
 ): string {
-  const mappedId = idsByIndex[String(index)];
-  if (mappedId && isDriveSlideId(mappedId)) {
-    return mappedId;
-  }
-
-  const dataId = slideIdFromElement(element);
-  if (dataId) {
-    return dataId;
-  }
-
-  if (hashId && isDriveSlideId(hashId)) {
-    return hashId;
-  }
-
-  return indexSlideKey(index);
+  return pickSlideKey(slideIdFromElement(element), index, idsByIndex, hashId);
 }
 
 function getThumbnailRect(thumbnail: Element): DOMRect {
@@ -166,6 +178,11 @@ export function getThumbnailGlobalIndex(
   element: Element,
   fallbackIndex: number,
 ): number {
+  const fromPage = slideIndexFromPageNumber(element);
+  if (fromPage != null) {
+    return fromPage;
+  }
+
   const posinset = element.getAttribute('aria-posinset');
   if (posinset) {
     const parsed = Number.parseInt(posinset, 10);
@@ -210,11 +227,11 @@ export function buildIndexSlideKeyMap(
 
   for (const info of thumbnails) {
     if (!info.slideKey.startsWith('index:')) {
-      indexSlideKeys[String(info.index)] = info.slideKey;
+      assignIndexSlideId(indexSlideKeys, info.index, info.slideKey);
     }
   }
 
-  return indexSlideKeys;
+  return uniqueIndexMappings(indexSlideKeys);
 }
 
 export function ensureChipOverlay(scroll: HTMLElement): HTMLElement {
@@ -362,12 +379,6 @@ export function waitForFilmstrip(
       resolve(ready());
     }, timeoutMs);
   });
-}
-
-function parsePositiveInt(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function getLabeledSlideTotal(): number | null {
