@@ -21,6 +21,19 @@ export function getEffectiveSyncError(
   return state.error ?? getPresentationSyncError(state, presentationId);
 }
 
+export function getAnySyncError(state: SyncState): string | null {
+  if (state.error) {
+    return state.error;
+  }
+
+  const presentationErrors = state.presentationErrors;
+  if (!presentationErrors) {
+    return null;
+  }
+
+  return Object.values(presentationErrors)[0] ?? null;
+}
+
 export function isSyncReady(
   state: SyncState,
   presentationId?: string,

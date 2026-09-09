@@ -31,6 +31,7 @@ const BADGE_STYLES = `
   }
 
   .badge-wrap {
+    anchor-name: --progress-badge;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -42,7 +43,6 @@ const BADGE_STYLES = `
   }
 
   .percent-button {
-    anchor-name: --progress-badge;
     display: none;
     align-items: center;
     gap: 5px;
@@ -156,6 +156,20 @@ const BADGE_STYLES = `
 
   .sync-button[data-state="error"]:active:not(:disabled) {
     background: #f6d5d3;
+  }
+
+  .sync-error-message {
+    display: none;
+    max-width: 240px;
+    color: #c5221f;
+    font: 12px/1.3 ${GOOGLE_SANS_STACK};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .badge-wrap[data-has-error="true"] .sync-error-message {
+    display: block;
   }
 
   .detail-panel {
@@ -506,6 +520,9 @@ export function createDeckBadge(): DeckBadgeElement {
     }
   });
 
+  const syncErrorMessage = document.createElement('span');
+  syncErrorMessage.className = 'sync-error-message';
+
   const syncButton = document.createElement('button');
   syncButton.type = 'button';
   syncButton.className = 'sync-button';
@@ -631,6 +648,15 @@ export function createDeckBadge(): DeckBadgeElement {
 
     const isReady = syncState.signedIn && !syncState.error;
     wrap.dataset.mode = isReady ? 'ready' : 'blocked';
+    wrap.dataset.hasError = syncState.error ? 'true' : 'false';
+
+    if (syncState.error) {
+      syncErrorMessage.textContent = syncState.error;
+      syncErrorMessage.title = syncState.error;
+    } else {
+      syncErrorMessage.textContent = '';
+      syncErrorMessage.removeAttribute('title');
+    }
 
     const noneCount =
       counts.rows.find((row) => row.status === 'none')?.count ?? 0;
@@ -651,7 +677,10 @@ export function createDeckBadge(): DeckBadgeElement {
       syncButton.dataset.state = 'error';
       syncButton.textContent = 'Sync error';
       syncButton.disabled = false;
-      syncButton.setAttribute('aria-label', 'Sync error. Click to retry');
+      syncButton.setAttribute(
+        'aria-label',
+        `Sync error: ${syncState.error}. Click to retry`,
+      );
     } else {
       syncButton.dataset.state = 'synced';
       syncButton.textContent = 'Synced';
@@ -673,7 +702,7 @@ export function createDeckBadge(): DeckBadgeElement {
     render();
   };
 
-  wrap.append(percentButton, syncButton, detailPanel);
+  wrap.append(percentButton, syncButton, syncErrorMessage, detailPanel);
   shadow.append(wrap, resetDialog);
   render();
   return host;

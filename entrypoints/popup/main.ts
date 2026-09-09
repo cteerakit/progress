@@ -1,7 +1,7 @@
 import './style.css';
 import { getSyncState, watchSyncState } from '../../background/storage';
 import { getAuthStatus, requestAuth, requestSignOut } from '../../utils/messages';
-import type { SyncState } from '../../utils/sync-state';
+import { getAnySyncError, type SyncState } from '../../utils/sync-state';
 
 function requireElement<T extends HTMLElement>(
   id: string,
@@ -49,15 +49,17 @@ function setBusy(busy: boolean): void {
 }
 
 function render(state: SyncState): void {
+  const syncError = getAnySyncError(state);
+
   signInButton.hidden = state.signedIn;
   signOutButton.hidden = !state.signedIn;
 
   if (!state.signedIn) {
-    statusDot.dataset.state = state.error ? 'error' : 'signed-out';
-    statusLabel.textContent = state.error ? 'Sign-in failed' : 'Not signed in';
+    statusDot.dataset.state = syncError ? 'error' : 'signed-out';
+    statusLabel.textContent = syncError ? 'Sign-in failed' : 'Not signed in';
     statusDetail.textContent =
-      state.error ?? 'Sign in to sync slide statuses with collaborators.';
-    if (state.error) {
+      syncError ?? 'Sign in to sync slide statuses with collaborators.';
+    if (syncError) {
       statusDetail.dataset.tone = 'error';
     } else {
       delete statusDetail.dataset.tone;
@@ -65,10 +67,10 @@ function render(state: SyncState): void {
     return;
   }
 
-  if (state.error) {
+  if (syncError) {
     statusDot.dataset.state = 'error';
     statusLabel.textContent = 'Sync error';
-    statusDetail.textContent = state.error;
+    statusDetail.textContent = syncError;
     statusDetail.dataset.tone = 'error';
     return;
   }
