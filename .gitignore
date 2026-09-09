@@ -14,19 +14,31 @@ stats.html
 stats-*.json
 .wxt
 web-ext.config.ts
+web-ext-artifacts
+*.tsbuildinfo
+
+# Packed extension artifacts
+*.crx
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
+# Secrets / local env
 .env
-.env.local
-extension.pem
+.env.*
+!.env.example
 
+# Private extension signing keys (commit extension.pub.b64)
+*.pem
+extension.pem

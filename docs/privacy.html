@@ -48,16 +48,26 @@
         The Extension adds slide status labels inside Google Slides. By default, status data
         stays in your browser. If you choose to sign in with Google, status labels are stored
         on each slide as hidden marker shapes in the presentation so collaborators can see
-        the same statuses. The Extension does not read slide text, images, or your browsing
-        history, and it does not sell your data.
+        the same statuses. Status presets and collaborator emails are stored in Google Drive
+        file metadata on that presentation. The Extension does not read slide text, images,
+        or your browsing history, and it does not sell your data.
       </p>
 
       <h2>What Data We Collect</h2>
       <p><strong>Data stored locally in your browser</strong></p>
       <ul>
         <li>
-          <strong>Slide statuses</strong> — Status labels, internal slide identifiers, and
-          update timestamps.
+          <strong>Slide statuses</strong> — Status labels (built-in or custom), internal
+          slide identifiers, update timestamps, and a compact history of prior changes when
+          signed in.
+        </li>
+        <li>
+          <strong>Status preset configuration</strong> — Customized labels, colors, icons,
+          order, and which statuses count as complete.
+        </li>
+        <li>
+          <strong>Signed-in account</strong> — Your Google email and profile photo URL after
+          sign-in, shown in the side panel Account view.
         </li>
         <li>
           <strong>Presentation identifiers</strong> — Google Slides presentation IDs for
@@ -65,28 +75,35 @@
         </li>
         <li>
           <strong>Sync state</strong> — Sign-in status, last sync time, and recent sync
-          error messages shown in the popup.
+          error messages shown in the side panel.
         </li>
       </ul>
       <p>
         This data is stored in <code>chrome.storage.local</code> and is used only to power
-        the Extension UI.
+        the Extension UI (filmstrip chips, title-bar badge, and side panel).
       </p>
 
       <p><strong>Data sent to Google when you sign in</strong></p>
       <ul>
         <li>
           <strong>Authentication</strong> — Google OAuth through Chrome's identity API with
-          the <code>presentations</code> scope. We do not receive your Google password.
+          the <code>presentations</code>, <code>drive.metadata</code>,
+          <code>userinfo.email</code>, and <code>userinfo.profile</code> scopes. We do not
+          receive your Google password.
         </li>
         <li>
           <strong>Slide status markers</strong> — Status labels stored on each slide as
           hidden marker shapes with alt-text metadata for presentations you can edit.
         </li>
         <li>
-          <strong>Presentation access</strong> — Marker read/write only on presentations
-          you open in Google Slides while using the Extension. API requests are limited
-          to slide page IDs and marker alt-text.
+          <strong>Status presets and collaborator emails</strong> — Stored in Google Drive
+          file metadata on the presentation. Profile photos stay in local cache and are not
+          written to Drive.
+        </li>
+        <li>
+          <strong>Presentation access</strong> — Marker and Drive metadata read/write only
+          on presentations you open in Google Slides while using the Extension. Slides API
+          requests are limited to slide page IDs and marker alt-text.
         </li>
       </ul>
 
@@ -97,12 +114,17 @@
         <li>Analytics, telemetry, crash reports, or advertising identifiers</li>
         <li>Financial, health, or location information</li>
       </ul>
+      <p>
+        The Extension does collect email addresses as described above: your signed-in Google
+        email, and collaborator emails stored in Drive file metadata for history attribution.
+      </p>
 
       <h2>How We Use Data</h2>
       <p>
         We use data solely to provide Extension features: status chips, progress badges,
-        local caching, optional collaborator sync, and sync status in the popup. We do not use
-        your data for advertising, creditworthiness, or unrelated purposes.
+        local caching, optional collaborator sync, customizable presets, and the side panel
+        (History, Statuses, and Account). We do not use your data for advertising,
+        creditworthiness, or unrelated purposes.
       </p>
 
       <h2>How Data Is Stored</h2>
@@ -126,6 +148,16 @@
             <td>When you are signed in and sync</td>
           </tr>
           <tr>
+            <td>Status presets and collaborator emails</td>
+            <td>Google Drive file metadata on the presentation</td>
+            <td>When you are signed in and sync</td>
+          </tr>
+          <tr>
+            <td>Signed-in email and profile photos</td>
+            <td>Your browser</td>
+            <td>While cached locally</td>
+          </tr>
+          <tr>
             <td>OAuth token</td>
             <td>Managed by Chrome / Google</td>
             <td>While you remain signed in</td>
@@ -147,7 +179,17 @@
         </li>
         <li>
           <a href="https://policies.google.com/privacy" rel="noopener noreferrer"
+            >Google userinfo API</a
+          >
+        </li>
+        <li>
+          <a href="https://policies.google.com/privacy" rel="noopener noreferrer"
             >Google Slides API</a
+          >
+        </li>
+        <li>
+          <a href="https://policies.google.com/privacy" rel="noopener noreferrer"
+            >Google Drive API</a
           >
         </li>
       </ul>
@@ -156,15 +198,17 @@
       <h2>Data Sharing</h2>
       <p>
         We do not sell, rent, or trade your data. If you sign in and sync, status markers are
-        stored inside the presentation. Collaborators with edit access can read those markers
-        through Google Slides and this Extension.
+        stored inside the presentation, and status presets plus collaborator emails are stored
+        in that file's Drive metadata. Collaborators with edit access can read this metadata
+        through Google Slides, Google Drive, and this Extension.
       </p>
 
       <h2>Data Retention and Deletion</h2>
       <ul>
         <li>
           <strong>Local data</strong> — Remains until you clear it or uninstall the
-          Extension. You can reset all slide statuses from the title-bar breakdown panel.
+          Extension. You can reset all slide statuses from the title-bar breakdown panel and
+          clear per-slide history from the side panel.
         </li>
         <li>
           <strong>Slide markers</strong> — Remain on slides until you reset statuses to No
@@ -172,19 +216,39 @@
           further sync.
         </li>
         <li>
-          <strong>Authentication</strong> — Click <strong>Sign out</strong> in the popup to
-          revoke the cached OAuth token.
+          <strong>Drive metadata</strong> — Presets and collaborator emails remain on the
+          presentation until overwritten by a later sync or removed through Google Drive.
+        </li>
+        <li>
+          <strong>Authentication</strong> — Click <strong>Sign out</strong> in the side
+          panel Account view to revoke the cached OAuth token.
         </li>
       </ul>
 
       <h2>Permissions</h2>
       <ul>
-        <li><code>storage</code> — Local cache of slide statuses</li>
+        <li><code>storage</code> — Local cache of slide statuses, presets, and profile photos</li>
         <li><code>identity</code> — Optional Google sign-in</li>
         <li><code>alarms</code> — Periodic background sync for open presentations</li>
         <li>
+          <code>sidePanel</code> — History, Statuses, and Account UI; opens when you click
+          the toolbar icon
+        </li>
+        <li>
+          <code>https://docs.google.com/*</code> — Find open Google Slides tabs so chips,
+          presets, and the side panel stay in sync
+        </li>
+        <li>
           <code>https://slides.googleapis.com/*</code> — Read slide structure and write
           status marker shapes when signed in
+        </li>
+        <li>
+          <code>https://www.googleapis.com/drive/v3/*</code> — Read and write status preset
+          and collaborator email metadata when signed in
+        </li>
+        <li>
+          <code>https://www.googleapis.com/oauth2/v3/*</code> — Fetch the signed-in user's
+          email and profile photo
         </li>
       </ul>
 
