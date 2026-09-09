@@ -2,13 +2,13 @@
 
 **Progress for Google Slides**
 
-Last updated: September 8, 2026
+Last updated: September 9, 2026
 
 These Terms of Service ("Terms") govern your use of the Progress for Google Slides Chrome extension ("the Extension," "we," "us"). By installing or using the Extension, you agree to these Terms.
 
 ## 1. Description of Service
 
-Progress for Google Slides lets you assign completion statuses to slides in Google Slides presentations, view overall progress in the title bar, and optionally sync statuses with collaborators through Google Drive file metadata.
+Progress for Google Slides lets you assign completion statuses to slides in Google Slides presentations, view overall progress in the title bar, and optionally sync statuses with collaborators through hidden marker shapes on each slide via the Google Slides API.
 
 The Extension is a browser add-on that runs locally in Chrome and, when you sign in, interacts with Google services on your behalf.
 
@@ -18,7 +18,7 @@ You must be able to form a binding contract in your jurisdiction to use the Exte
 
 ## 3. Google Account and Services
 
-Optional sync requires a Google account and your consent to Google OAuth with the `drive.metadata` scope. Your use of Google Slides, Google Drive, and related Google services is subject to [Google's Terms of Service](https://policies.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
+Optional sync requires a Google account and your consent to Google OAuth with the `presentations` scope. Your use of Google Slides and related Google services is subject to [Google's Terms of Service](https://policies.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
 
 We are not affiliated with, endorsed by, or sponsored by Google LLC. Google Slides and Google Drive are trademarks of Google LLC.
 
@@ -38,7 +38,7 @@ The Extension is intended to annotate slide completion status. It is not a subst
 Your use of the Extension is also governed by our [Privacy Policy](PRIVACY.md). By using the Extension, you acknowledge that:
 
 - Status data is stored locally in your browser
-- If you sign in, status metadata is written to Google Drive files you can edit
+- If you sign in, status markers are written to presentations you can edit
 - You are responsible for the sharing settings of presentations you edit in Google Drive
 
 ## 6. Intellectual Property

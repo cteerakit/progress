@@ -35,7 +35,7 @@
     <main id="main" class="page">
       <header>
         <h1>Privacy Policy</h1>
-        <p>Progress for Google Slides · Last updated September 8, 2026</p>
+        <p>Progress for Google Slides · Last updated September 9, 2026</p>
       </header>
 
       <p>
@@ -47,7 +47,7 @@
       <p>
         The Extension adds slide status labels inside Google Slides. By default, status data
         stays in your browser. If you choose to sign in with Google, status labels are stored
-        in Google Drive file metadata on presentations you can edit so collaborators can see
+        on each slide as hidden marker shapes in the presentation so collaborators can see
         the same statuses. The Extension does not read slide text, images, or your browsing
         history, and it does not sell your data.
       </p>
@@ -60,8 +60,8 @@
           update timestamps.
         </li>
         <li>
-          <strong>Presentation identifiers</strong> — Google Drive file IDs for
-          presentations where you have used the Extension.
+          <strong>Presentation identifiers</strong> — Google Slides presentation IDs for
+          decks where you have used the Extension.
         </li>
         <li>
           <strong>Sync state</strong> — Sign-in status, last sync time, and recent sync
@@ -77,15 +77,16 @@
       <ul>
         <li>
           <strong>Authentication</strong> — Google OAuth through Chrome's identity API with
-          the <code>drive.metadata</code> scope. We do not receive your Google password.
+          the <code>presentations</code> scope. We do not receive your Google password.
         </li>
         <li>
-          <strong>Slide status metadata</strong> — Status labels written to the
-          presentation's Drive <code>appProperties</code> metadata for files you can edit.
+          <strong>Slide status markers</strong> — Status labels stored on each slide as
+          hidden marker shapes with alt-text metadata for presentations you can edit.
         </li>
         <li>
-          <strong>Drive file access</strong> — Metadata read/write only on presentations
-          you open in Google Slides while using the Extension.
+          <strong>Presentation access</strong> — Marker read/write only on presentations
+          you open in Google Slides while using the Extension. API requests are limited
+          to slide page IDs and marker alt-text.
         </li>
       </ul>
 
@@ -120,8 +121,8 @@
             <td>While the Extension is installed</td>
           </tr>
           <tr>
-            <td>Slide status metadata</td>
-            <td>Google Drive file metadata</td>
+            <td>Slide status markers</td>
+            <td>Hidden shapes on each slide in the presentation</td>
             <td>When you are signed in and sync</td>
           </tr>
           <tr>
@@ -146,7 +147,7 @@
         </li>
         <li>
           <a href="https://policies.google.com/privacy" rel="noopener noreferrer"
-            >Google Drive API</a
+            >Google Slides API</a
           >
         </li>
       </ul>
@@ -154,9 +155,9 @@
 
       <h2>Data Sharing</h2>
       <p>
-        We do not sell, rent, or trade your data. If you sign in and sync, status metadata is
-        stored on Google Drive files you can edit. Collaborators with edit access can read
-        that metadata through Google Drive and this Extension.
+        We do not sell, rent, or trade your data. If you sign in and sync, status markers are
+        stored inside the presentation. Collaborators with edit access can read those markers
+        through Google Slides and this Extension.
       </p>
 
       <h2>Data Retention and Deletion</h2>
@@ -166,8 +167,9 @@
           Extension. You can reset all slide statuses from the title-bar breakdown panel.
         </li>
         <li>
-          <strong>Drive metadata</strong> — Remains in the file until you reset statuses or
-          remove it through Google Drive. Signing out stops further sync.
+          <strong>Slide markers</strong> — Remain on slides until you reset statuses to No
+          status (which deletes the markers) or remove them manually. Signing out stops
+          further sync.
         </li>
         <li>
           <strong>Authentication</strong> — Click <strong>Sign out</strong> in the popup to
@@ -181,8 +183,8 @@
         <li><code>identity</code> — Optional Google sign-in</li>
         <li><code>alarms</code> — Periodic background sync for open presentations</li>
         <li>
-          <code>https://www.googleapis.com/drive/v3/*</code> — Read/write presentation
-          metadata when signed in
+          <code>https://slides.googleapis.com/*</code> — Read slide structure and write
+          status marker shapes when signed in
         </li>
       </ul>
 

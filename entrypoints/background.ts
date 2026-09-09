@@ -1,14 +1,4 @@
 import { defineBackground } from 'wxt/utils/define-background';
-import {
-  assertPayloadFits,
-  buildAppPropertiesPatch,
-  decodeAppPropertiesToSlides,
-  fetchDriveFile,
-  mergeDeckStates,
-  updateDriveFileProperties,
-  DriveEditDeniedError,
-  DrivePayloadTooLargeError,
-} from '../utils/drive';
 import type { BackgroundMessage, BackgroundResponse } from '../utils/messages';
 import {
   getDeck,
@@ -20,7 +10,22 @@ import {
   updateSyncState,
 } from '../background/storage';
 import { fetchSignedInEmail } from '../utils/auth';
-import { pruneRedundantIndexSlides } from '../utils/status';
+import {
+  mergeDeckStates,
+  mergeIdsByIndex,
+  pruneRedundantIndexSlides,
+} from '../utils/status';
+import {
+  batchUpdatePresentationChunked,
+  fetchPresentation,
+  presentationCanEdit,
+  SlidesEditDeniedError,
+} from '../utils/slides-api';
+import {
+  buildMarkerDiffRequests,
+  decodePresentationMetadata,
+} from '../utils/slide-metadata';
+import { isGlobalSyncError } from '../utils/sync-state';
 import {
   ensureSyncAlarm,
   getWatchedPresentations,
@@ -149,49 +154,54 @@ async function recordSyncSuccess(presentationId: string): Promise<void> {
   });
 }
 
-async function syncDeckWithDrive(
+async function syncDeckWithSlides(
   presentationId: string,
   token: string,
 ): Promise<boolean> {
-  const remote = await fetchDriveFile(token, presentationId);
-  await setPresentationCanEdit(presentationId, remote.canEdit);
-  const remoteSlides = decodeAppPropertiesToSlides(remote.appProperties);
+  const presentation = await fetchPresentation(token, presentationId);
+  const canEdit = presentationCanEdit(presentation);
+  await setPresentationCanEdit(presentationId, canEdit);
+
+  const remote = decodePresentationMetadata(presentation);
   const local = await getDeck(presentationId);
-  const { merged, localChanged } = mergeDeckStates(local, remoteSlides, {
-    canEdit: remote.canEdit,
+  const { merged, localChanged } = mergeDeckStates(local, remote.slides, {
+    canEdit,
   });
-  const pruned = pruneRedundantIndexSlides(merged);
+  const withIds = {
+    ...merged,
+    idsByIndex: mergeIdsByIndex(merged.idsByIndex, remote.idsByIndex),
+  };
+  const pruned = pruneRedundantIndexSlides(withIds);
   const prunedIndexKeys =
     Object.keys(pruned.slides).length !== Object.keys(merged.slides).length;
 
   if (localChanged || prunedIndexKeys) {
-    if (remote.canEdit) {
+    if (canEdit) {
       await saveDeck(presentationId, pruned);
     } else {
       await overwriteDeckSlides(presentationId, pruned);
     }
   }
 
-  if (!remote.canEdit) {
+  if (!canEdit) {
     return false;
   }
 
   const latest = pruneRedundantIndexSlides(await getDeck(presentationId));
-  const { remoteChanged } = mergeDeckStates(latest, remoteSlides);
+  const { remoteChanged } = mergeDeckStates(latest, remote.slides);
 
   if (remoteChanged) {
     try {
-      assertPayloadFits(latest.slides);
-      await updateDriveFileProperties(
-        token,
-        presentationId,
-        buildAppPropertiesPatch(remote.appProperties, latest.slides),
+      const requests = buildMarkerDiffRequests(
+        latest.slides,
+        remote.markers,
       );
+      await batchUpdatePresentationChunked(token, presentationId, requests);
     } catch (error) {
-      if (error instanceof DriveEditDeniedError) {
+      if (error instanceof SlidesEditDeniedError) {
         await setPresentationCanEdit(presentationId, false);
         await overwriteDeckSlides(presentationId, {
-          slides: remoteSlides,
+          slides: remote.slides,
           idsByIndex: latest.idsByIndex,
         });
         return false;
@@ -207,7 +217,7 @@ async function handlePull(presentationId: string): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithDrive(presentationId, token);
+        const canEdit = await syncDeckWithSlides(presentationId, token);
         await recordSyncSuccess(presentationId);
         return canEdit;
       });
@@ -226,18 +236,13 @@ async function handlePush(presentationId: string): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithDrive(presentationId, token);
+        const canEdit = await syncDeckWithSlides(presentationId, token);
         await recordSyncSuccess(presentationId);
         return canEdit;
       });
 
       return { ok: true, signedIn: true, canEdit };
     } catch (error) {
-      if (error instanceof DrivePayloadTooLargeError) {
-        await setPresentationSyncError(presentationId, error.message);
-        return { ok: false, error: error.message, signedIn: true };
-      }
-
       const message = error instanceof Error ? error.message : 'Push failed';
       const { signedIn } = await recordSyncFailure(presentationId, message);
 

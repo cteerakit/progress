@@ -24,7 +24,7 @@
 
 - [ ] Register OAuth client as **Chrome extension** with published extension ID
 
-- [ ] Submit Google OAuth verification for `drive.metadata` scope (required for public listing)
+- [ ] Add `presentations` scope to OAuth consent screen and enable Google Slides API
 
 - [ ] Fill data disclosure form using answers in [Data Disclosure Form](#data-disclosure-form) below
 
@@ -92,7 +92,7 @@ FEATURES
 
 • Local cache for instant UI updates without waiting on the network
 
-• Optional Google sign-in to sync statuses with collaborators via Drive file metadata
+• Optional Google sign-in to sync statuses with collaborators via hidden slide marker shapes
 
 • Toolbar popup showing sync status, last synced time, sign-in, and sign-out
 
@@ -114,7 +114,7 @@ HOW TO USE
 
 PRIVACY
 
-Status data is stored locally in your browser. If you sign in, status labels are written to Google Drive metadata on presentations you can edit. The extension does not read slide text, images, or browsing history.
+Status data is stored locally in your browser. If you sign in, status labels are written as hidden marker shapes on slides in presentations you can edit. The extension does not read slide text, images, or browsing history.
 
 
 
@@ -132,7 +132,7 @@ PERMISSIONS
 
 • alarms — periodic background sync (once per minute) for open presentations
 
-• Google Drive API (drive/v3) — reads and writes status metadata on the active presentation only when signed in
+• Google Slides API — reads slide page IDs and writes hidden status marker shapes on the active presentation only when signed in
 
 
 
@@ -144,7 +144,7 @@ Email: c.teerakit@gmail.com
 
 
 
-Version 1.0.0 — Initial release: filmstrip status chips, title-bar progress badge, optional Drive metadata sync
+Version 1.0.0 — Initial release: filmstrip status chips, title-bar progress badge, optional Slides API sync
 
 ```
 
@@ -176,7 +176,7 @@ English
 
 ```
 
-Assign slide completion statuses on Google Slides filmstrip thumbnails and optionally sync them with collaborators through Google Drive file metadata.
+Assign slide completion statuses on Google Slides filmstrip thumbnails and optionally sync them with collaborators through hidden marker shapes on each slide.
 
 ```
 
@@ -250,7 +250,7 @@ Productivity
 
 **Single Purpose**
 
-Assign slide completion statuses on Google Slides filmstrip thumbnails and optionally sync them with collaborators through Google Drive file metadata.
+Assign slide completion statuses on Google Slides filmstrip thumbnails and optionally sync them with collaborators through hidden marker shapes on each slide.
 
 
 
@@ -334,11 +334,11 @@ Optional caption ideas (add in image editor, not required by CWS):
 
 | `storage` | permissions | Caches slide status assignments locally so the filmstrip UI updates instantly without waiting for network requests. |
 
-| `identity` | permissions | Lets users optionally sign in with Google to read and write slide status metadata on the open presentation via the Drive API. |
+| `identity` | permissions | Lets users optionally sign in with Google to read and write slide status markers on the open presentation via the Slides API. |
 
 | `alarms` | permissions | Runs periodic background sync (once per minute) for presentations currently open in Slides, replacing aggressive content-script polling. |
 
-| `https://www.googleapis.com/drive/v3/*` | host_permissions | Reads and updates `appProperties` metadata on the active Google Slides file so collaborators can share slide statuses. Only called when the user is signed in. |
+| `https://slides.googleapis.com/*` | host_permissions | Reads slide structure and writes hidden status marker shapes on the active presentation so collaborators can share slide statuses. Only called when the user is signed in. API requests use a field mask limited to page IDs and marker alt-text. |
 
 
 
@@ -446,7 +446,7 @@ Use these answers in the Chrome Web Store **Privacy practices** tab. They must m
 
    - Shared with third parties: No
 
-   - Note: Transmitted off-device only when user signs in; stored in Google Drive file metadata
+   - Note: Transmitted off-device only when user signs in; stored as hidden marker shapes on slides
 
 
 
@@ -552,13 +552,13 @@ https://cteerakit.github.io/progress/
 
 
 
-Required before public release because the extension uses the restricted `drive.metadata` scope.
+Required before public release because the extension uses the `presentations` scope, which can read and write presentation content.
 
 
 
-1. **Google Cloud Console** — Enable Google Drive API
+1. **Google Cloud Console** — Enable Google Slides API
 
-2. **OAuth consent screen** — App name: "Progress for Google Slides"; scope: `https://www.googleapis.com/auth/drive.metadata`
+2. **OAuth consent screen** — App name: "Progress for Google Slides"; scope: `https://www.googleapis.com/auth/presentations`
 
 3. **OAuth client** — Type: **Chrome extension**; Item ID: extension ID from Chrome Web Store (update after first upload) or from `npm run generate-extension-key` for testing
 
@@ -570,13 +570,13 @@ Required before public release because the extension uses the restricted `drive.
 
    - YouTube or written demo showing sign-in and sync on a Google Slides file
 
-   - Explanation that only Drive file metadata (`appProperties`) is accessed, not slide content
+   - Explanation that only slide page IDs and hidden status marker shapes are read/written, not slide text or images
 
 
 
 **Scope justification for Google verification:**
 
-> The extension stores slide completion statuses (To do, In progress, Need attention, Done) in Google Drive file metadata so collaborators editing the same presentation can see shared progress. It does not read or modify slide content, only custom metadata fields on the presentation file.
+> The extension stores slide completion statuses (To do, In progress, Need attention, Done) as hidden marker shapes on each slide so collaborators editing the same presentation can see shared progress. It does not read or modify slide text, images, or speaker notes—only slide page IDs and marker alt-text.
 
 
 
@@ -620,9 +620,9 @@ TECHNICAL NOTES
 
 • Does NOT read slide text, images, speaker notes, or browsing history
 
-• Optional sign-in uses chrome.identity with drive.metadata scope
+• Optional sign-in uses chrome.identity with presentations scope
 
-• Sync writes slide status labels to Drive appProperties only on files the user can edit
+• Sync writes hidden status marker shapes on slides only in presentations the user can edit
 
 • Local data stored in chrome.storage.local; no developer-operated servers
 
@@ -646,7 +646,7 @@ Privacy Policy: https://cteerakit.github.io/progress/privacy.html
 
 |---------|------|---------|--------|
 
-| 1.0.0 | 2026-09-08 | Initial release: five slide statuses, filmstrip chips, title-bar progress badge, optional Drive metadata sync, privacy policy and terms | Draft |
+| 1.0.0 | 2026-09-08 | Initial release: five slide statuses, filmstrip chips, title-bar progress badge, optional Slides API sync, privacy policy and terms | Draft |
 
 
 
@@ -662,7 +662,7 @@ Privacy Policy: https://cteerakit.github.io/progress/privacy.html
 
 
 
-- `drive.metadata` is a restricted OAuth scope; public listing requires Google verification.
+- `presentations` is a sensitive OAuth scope; disclose that only marker shapes are written, not slide content.
 
 - Unpacked development requires either `npm run dev` (with dev server) or `npm run build:local` (stable extension ID). Do not include the manifest `key` field in Chrome Web Store uploads.
 

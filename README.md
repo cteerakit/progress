@@ -4,7 +4,7 @@
 
 **[Install from Chrome Web Store](https://chromewebstore.google.com/detail/mgebbidbnfnomiilkimbiplmkafccmpf)**
 
-A Chrome extension for Google Slides that lets you assign **No status**, **To do**, **In progress**, **Need attention**, and **Done** to each slide from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via Google Drive metadata.
+A Chrome extension for Google Slides that lets you assign **No status**, **To do**, **In progress**, **Need attention**, and **Done** to each slide from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via hidden marker shapes on each slide.
 
 
 
@@ -26,7 +26,7 @@ Built with [WXT](https://wxt.dev) and Manifest V3.
 
 - Local cache for instant UI
 
-- Collaborator sync through Drive `appProperties` (requires sign-in), with background `chrome.alarms` polling
+- Collaborator sync through the Google Slides API (requires sign-in), with background `chrome.alarms` polling
 
 - Toolbar popup with sync status and sign-out
 
@@ -90,7 +90,7 @@ This creates `extension.pub.b64` (commit this) and `extension.pem` (private, git
 
 
 
-1. Create a Google Cloud project and enable **Google Drive API**
+1. Create a Google Cloud project and enable **Google Slides API**
 
 2. Configure the OAuth consent screen (Testing mode is fine for development)
 
@@ -126,7 +126,7 @@ After publishing to the Chrome Web Store, update the OAuth client with the store
 
 
 
-`drive.metadata` is a restricted scope. Unpacked + test users work for development; public Chrome Web Store release requires Google verification. See `CHROMEWEBSTORE.md` for listing metadata and permission justifications.
+The `presentations` scope allows read/write access to presentation content; the Extension only reads slide page IDs and writes small hidden marker shapes for status sync. See `CHROMEWEBSTORE.md` for listing metadata and permission justifications.
 
 
 
@@ -150,11 +150,11 @@ npm run zip
 
 - `storage` — local slide status cache
 
-- `identity` — Google sign-in for Drive sync
+- `identity` — Google sign-in for Slides sync
 
 - `alarms` — periodic background sync for open presentations (1 minute)
 
-- `https://www.googleapis.com/drive/v3/*` — read/write presentation metadata
+- `https://slides.googleapis.com/*` — read slide structure and write status marker shapes
 
 
 

@@ -339,3 +339,102 @@ export function applyReadOnlyRemoteDeck(
     idsByIndex: { ...incoming.idsByIndex, ...local.idsByIndex },
   });
 }
+
+function slideMapsDiffer(
+  left: Record<string, SlideRecord>,
+  right: Record<string, SlideRecord>,
+): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    const a = left[key];
+    const b = right[key];
+    if (!a || !b) {
+      return Boolean(a) !== Boolean(b);
+    }
+    if (a.status !== b.status || a.updatedAt !== b.updatedAt) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function mergeDeckStates(
+  local: DeckState,
+  remoteSlides: Record<string, SlideRecord>,
+  options: { canEdit?: boolean } = {},
+): { merged: DeckState; localChanged: boolean; remoteChanged: boolean } {
+  if (options.canEdit === false) {
+    return {
+      merged: {
+        slides: { ...remoteSlides },
+        idsByIndex: { ...local.idsByIndex },
+      },
+      localChanged: slideMapsDiffer(local.slides, remoteSlides),
+      remoteChanged: false,
+    };
+  }
+
+  const mergedSlides: Record<string, SlideRecord> = { ...local.slides };
+  let localChanged = false;
+  let remoteChanged = false;
+
+  const allKeys = new Set([
+    ...Object.keys(local.slides),
+    ...Object.keys(remoteSlides),
+  ]);
+
+  for (const slideKey of allKeys) {
+    const localRecord = local.slides[slideKey];
+    const remoteRecord = remoteSlides[slideKey];
+
+    if (!isSlideKey(slideKey)) {
+      continue;
+    }
+
+    if (!remoteRecord) {
+      if (localRecord && localRecord.status !== 'none') {
+        remoteChanged = true;
+      }
+      continue;
+    }
+
+    if (!localRecord || remoteRecord.updatedAt > localRecord.updatedAt) {
+      mergedSlides[slideKey] = remoteRecord;
+      if (
+        !localRecord ||
+        localRecord.status !== remoteRecord.status ||
+        localRecord.updatedAt !== remoteRecord.updatedAt
+      ) {
+        localChanged = true;
+      }
+    } else if (localRecord.updatedAt > remoteRecord.updatedAt) {
+      remoteChanged = true;
+    }
+  }
+
+  return {
+    merged: {
+      slides: mergedSlides,
+      idsByIndex: { ...local.idsByIndex },
+    },
+    localChanged,
+    remoteChanged,
+  };
+}
+
+export function mergeIdsByIndex(
+  local: Record<string, string>,
+  remote: Record<string, string>,
+): Record<string, string> {
+  const merged = { ...local };
+  for (const [index, slideId] of Object.entries(remote)) {
+    if (
+      isDriveSlideId(slideId) ||
+      !merged[index] ||
+      !isDriveSlideId(merged[index])
+    ) {
+      merged[index] = slideId;
+    }
+  }
+  return uniqueIndexMappings(merged);
+}

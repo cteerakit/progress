@@ -5,9 +5,9 @@ export interface SyncState {
   signedInEmail?: string | null;
   /** Account- or auth-level failures only. */
   error: string | null;
-  /** Per-presentation sync failures keyed by Drive file id. */
+  /** Per-presentation sync failures keyed by presentation id. */
   presentationErrors?: Record<string, string>;
-  /** Per-presentation Drive edit capability. Missing means unknown (treat as editable). */
+  /** Per-presentation edit capability. Missing means unknown (treat as editable). */
   presentationCanEdit?: Record<string, boolean>;
 }
 
@@ -66,7 +66,7 @@ export function isGlobalSyncError(message: string): boolean {
     message === 'Authentication expired' ||
     message === 'Sign-in cancelled' ||
     message === 'Sign-in failed' ||
-    message.includes('Drive sign-in expired') ||
-    message.includes('Google Drive API is disabled')
+    message.includes('Slides sign-in expired') ||
+    message.includes('Google Slides API is disabled')
   );
 }
