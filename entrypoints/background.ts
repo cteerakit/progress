@@ -1,22 +1,25 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import {
   assertPayloadFits,
+  buildAppPropertiesPatch,
   decodeAppPropertiesToSlides,
-  encodeDeckToAppProperties,
   fetchDriveFile,
   mergeDeckStates,
   updateDriveFileProperties,
+  DriveEditDeniedError,
   DrivePayloadTooLargeError,
 } from '../utils/drive';
 import type { BackgroundMessage, BackgroundResponse } from '../utils/messages';
 import {
   getDeck,
   getSyncState,
+  overwriteDeckSlides,
   saveDeck,
+  setPresentationCanEdit,
   setPresentationSyncError,
   updateSyncState,
 } from '../background/storage';
-import { isGlobalSyncError } from '../utils/sync-state';
+import { fetchSignedInEmail } from '../utils/auth';
 import { pruneRedundantIndexSlides } from '../utils/status';
 import {
   ensureSyncAlarm,
@@ -96,6 +99,20 @@ async function withAuthToken<T>(
   }
 }
 
+async function syncSignedInEmail(token: string | null): Promise<void> {
+  if (!token) {
+    await updateSyncState({ signedInEmail: null });
+    return;
+  }
+
+  try {
+    const email = await fetchSignedInEmail(token);
+    await updateSyncState({ signedInEmail: email });
+  } catch (error) {
+    console.warn('[progress] fetchSignedInEmail failed', error);
+  }
+}
+
 async function recordSyncFailure(
   presentationId: string,
   message: string,
@@ -114,6 +131,7 @@ async function recordSyncFailure(
     await updateSyncState({
       signedIn: false,
       error: null,
+      signedInEmail: null,
     });
     return { signedIn: false };
   }
@@ -134,44 +152,67 @@ async function recordSyncSuccess(presentationId: string): Promise<void> {
 async function syncDeckWithDrive(
   presentationId: string,
   token: string,
-): Promise<void> {
+): Promise<boolean> {
   const remote = await fetchDriveFile(token, presentationId);
+  await setPresentationCanEdit(presentationId, remote.canEdit);
   const remoteSlides = decodeAppPropertiesToSlides(remote.appProperties);
   const local = await getDeck(presentationId);
-  const { merged, localChanged } = mergeDeckStates(
-    local,
-    remoteSlides,
-  );
+  const { merged, localChanged } = mergeDeckStates(local, remoteSlides, {
+    canEdit: remote.canEdit,
+  });
   const pruned = pruneRedundantIndexSlides(merged);
   const prunedIndexKeys =
     Object.keys(pruned.slides).length !== Object.keys(merged.slides).length;
 
   if (localChanged || prunedIndexKeys) {
-    await saveDeck(presentationId, pruned);
+    if (remote.canEdit) {
+      await saveDeck(presentationId, pruned);
+    } else {
+      await overwriteDeckSlides(presentationId, pruned);
+    }
+  }
+
+  if (!remote.canEdit) {
+    return false;
   }
 
   const latest = pruneRedundantIndexSlides(await getDeck(presentationId));
   const { remoteChanged } = mergeDeckStates(latest, remoteSlides);
 
-  if (remoteChanged && remote.canEdit) {
-    assertPayloadFits(latest.slides);
-    await updateDriveFileProperties(
-      token,
-      presentationId,
-      encodeDeckToAppProperties(latest.slides),
-    );
+  if (remoteChanged) {
+    try {
+      assertPayloadFits(latest.slides);
+      await updateDriveFileProperties(
+        token,
+        presentationId,
+        buildAppPropertiesPatch(remote.appProperties, latest.slides),
+      );
+    } catch (error) {
+      if (error instanceof DriveEditDeniedError) {
+        await setPresentationCanEdit(presentationId, false);
+        await overwriteDeckSlides(presentationId, {
+          slides: remoteSlides,
+          idsByIndex: latest.idsByIndex,
+        });
+        return false;
+      }
+      throw error;
+    }
   }
+
+  return true;
 }
 
 async function handlePull(presentationId: string): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
-      await withAuthToken(false, async (token) => {
-        await syncDeckWithDrive(presentationId, token);
+      const canEdit = await withAuthToken(false, async (token) => {
+        const canEdit = await syncDeckWithDrive(presentationId, token);
         await recordSyncSuccess(presentationId);
+        return canEdit;
       });
 
-      return { ok: true, signedIn: true };
+      return { ok: true, signedIn: true, canEdit };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pull failed';
       const { signedIn } = await recordSyncFailure(presentationId, message);
@@ -184,12 +225,13 @@ async function handlePull(presentationId: string): Promise<BackgroundResponse> {
 async function handlePush(presentationId: string): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
-      await withAuthToken(false, async (token) => {
-        await syncDeckWithDrive(presentationId, token);
+      const canEdit = await withAuthToken(false, async (token) => {
+        const canEdit = await syncDeckWithDrive(presentationId, token);
         await recordSyncSuccess(presentationId);
+        return canEdit;
       });
 
-      return { ok: true, signedIn: true };
+      return { ok: true, signedIn: true, canEdit };
     } catch (error) {
       if (error instanceof DrivePayloadTooLargeError) {
         await setPresentationSyncError(presentationId, error.message);
@@ -221,6 +263,7 @@ async function handleAuth(interactive: boolean): Promise<BackgroundResponse> {
       await updateSyncState({
         signedIn: false,
         error: null,
+        signedInEmail: null,
       });
       await reflectAuthInAction(false);
       return { ok: false, error: 'Sign-in cancelled', signedIn: false };
@@ -231,6 +274,7 @@ async function handleAuth(interactive: boolean): Promise<BackgroundResponse> {
       lastSyncAt: Date.now(),
       error: null,
     });
+    await syncSignedInEmail(token);
     await reflectAuthInAction(true);
 
     return { ok: true, signedIn: true };
@@ -240,6 +284,7 @@ async function handleAuth(interactive: boolean): Promise<BackgroundResponse> {
     await updateSyncState({
       signedIn: false,
       error: message,
+      signedInEmail: null,
     });
     await reflectAuthInAction(false);
     return { ok: false, error: message, signedIn: false };
@@ -259,7 +304,10 @@ async function handleAuthStatus(): Promise<BackgroundResponse> {
     await updateSyncState({
       signedIn: false,
       error: null,
+      signedInEmail: null,
     });
+  } else {
+    await syncSignedInEmail(token);
   }
   await reflectAuthInAction(signedIn);
   return { ok: true, signedIn };
@@ -279,6 +327,7 @@ async function handleSignOut(): Promise<BackgroundResponse> {
   await updateSyncState({
     signedIn: false,
     error: null,
+    signedInEmail: null,
   });
   await reflectAuthInAction(false);
   return { ok: true, signedIn: false };
@@ -295,6 +344,7 @@ async function syncWatchedPresentations(): Promise<void> {
     await updateSyncState({
       signedIn: false,
       error: null,
+      signedInEmail: null,
     });
     await reflectAuthInAction(false);
     return;

@@ -268,3 +268,14 @@ export function applyStorageDeckUpdate(
     idsByIndex: { ...incoming.idsByIndex, ...local.idsByIndex },
   });
 }
+
+/** View-only: remote slide statuses always win; keep local thumbnail id mappings. */
+export function applyReadOnlyRemoteDeck(
+  local: DeckState,
+  incoming: DeckState,
+): DeckState {
+  return pruneRedundantIndexSlides({
+    slides: { ...incoming.slides },
+    idsByIndex: { ...incoming.idsByIndex, ...local.idsByIndex },
+  });
+}

@@ -49,6 +49,15 @@ const CHIP_STYLES = `
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.22);
   }
 
+  .chip-button[data-editable="false"] {
+    cursor: default;
+  }
+
+  .chip-button[data-editable="false"]:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
   .chip-icon {
     display: block;
     width: 22px;
@@ -105,12 +114,24 @@ const CHIP_STYLES = `
     background: #f1f3f4;
   }
 
+  .status-option:disabled {
+    cursor: default;
+  }
+
+  .status-option:disabled:hover {
+    background: transparent;
+  }
+
   .status-option[aria-current="true"] {
     background: #f8f9fa;
   }
 
   .status-option[aria-current="true"]:hover {
     background: #f1f3f4;
+  }
+
+  .status-option[aria-current="true"]:disabled:hover {
+    background: #f8f9fa;
   }
 
   .option-icon {
@@ -128,6 +149,7 @@ export type StatusChangeHandler = (
 export type StatusChipElement = HTMLElement & {
   setSlideKey: (slideKey: string) => void;
   setStatus: (status: SlideStatus) => void;
+  setEditable: (editable: boolean) => void;
 };
 
 let onStatusChange: StatusChangeHandler = async () => {};
@@ -172,7 +194,7 @@ export function createStatusChip(
   slideKey: string,
   status: SlideStatus,
 ): StatusChipElement {
-  const host = document.createElement('div') as StatusChipElement;
+  const host = document.createElement('div') as unknown as StatusChipElement;
   host.className = CHIP_CLASS;
 
   const shadow = host.attachShadow({ mode: 'open' });
@@ -180,6 +202,7 @@ export function createStatusChip(
 
   let currentKey = slideKey;
   let currentStatus: SlideStatus = status;
+  let editable = true;
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -227,6 +250,9 @@ export function createStatusChip(
 
   button.addEventListener('click', (event) => {
     stopSlideInteraction(event);
+    if (!editable) {
+      return;
+    }
     setPanelOpen(!panelOpen);
   });
 
@@ -253,6 +279,9 @@ export function createStatusChip(
     item.append(optionIcon, label);
     item.addEventListener('click', (event) => {
       stopSlideInteraction(event);
+      if (!editable) {
+        return;
+      }
       setPanelOpen(false);
       currentStatus = option.value;
       render();
@@ -274,19 +303,32 @@ export function createStatusChip(
 
   const render = () => {
     const color = STATUS_COLORS[currentStatus];
+    const statusLabel =
+      STATUS_OPTIONS.find((item) => item.value === currentStatus)?.label ??
+      'No status';
     button.dataset.status = currentStatus;
+    button.dataset.editable = editable ? 'true' : 'false';
     button.style.setProperty('--chip-color', color);
     setStatusIcon(icon, currentStatus, color);
     button.setAttribute(
       'aria-label',
-      `Slide status: ${STATUS_OPTIONS.find((item) => item.value === currentStatus)?.label ?? 'No status'}`,
+      editable
+        ? `Slide status: ${statusLabel}`
+        : `Slide status: ${statusLabel}. View only`,
     );
+    if (editable) {
+      button.removeAttribute('title');
+    } else {
+      button.title = 'View only. You need edit access to change this status.';
+      setPanelOpen(false);
+    }
 
     for (const option of panel.querySelectorAll<HTMLButtonElement>(
       '.status-option',
     )) {
       const isCurrent = option.dataset.status === currentStatus;
       option.setAttribute('aria-current', isCurrent ? 'true' : 'false');
+      option.disabled = !editable;
     }
   };
 
@@ -295,6 +337,10 @@ export function createStatusChip(
   };
   host.setStatus = (nextStatus) => {
     currentStatus = nextStatus;
+    render();
+  };
+  host.setEditable = (nextEditable) => {
+    editable = nextEditable;
     render();
   };
 

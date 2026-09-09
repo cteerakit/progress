@@ -43,8 +43,10 @@ export async function pullRemoteDeck(
   return sendBackgroundMessage({ type: 'PULL', presentationId });
 }
 
-export async function pushLocalDeck(presentationId: string): Promise<void> {
-  await sendBackgroundMessage({ type: 'PUSH', presentationId });
+export async function pushLocalDeck(
+  presentationId: string,
+): Promise<BackgroundResponse> {
+  return sendBackgroundMessage({ type: 'PUSH', presentationId });
 }
 
 export async function requestAuth(interactive: boolean): Promise<BackgroundResponse> {

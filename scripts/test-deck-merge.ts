@@ -1,9 +1,11 @@
 import {
   encodeDeckToAppProperties,
   decodeAppPropertiesToSlides,
+  mergeDeckStates,
 } from '../utils/drive';
 import {
   applyLocalDeckSave,
+  applyReadOnlyRemoteDeck,
   applyStorageDeckUpdate,
   createEmptyDeck,
   isDriveSlideId,
@@ -129,6 +131,29 @@ const mappingKept = applyLocalDeckSave(
 assert(
   mappingKept.idsByIndex['0'] === 'id.p1',
   'a real slide-id mapping must not be replaced by a bogus id',
+);
+
+const viewerLocal: DeckState = {
+  slides: { 'id.p1': { status: 'done', updatedAt: 200 } },
+  idsByIndex: { '0': 'id.p1' },
+};
+const viewerRemote = {
+  'id.p1': { status: 'todo' as const, updatedAt: 100 },
+};
+const viewerMerge = mergeDeckStates(viewerLocal, viewerRemote, { canEdit: false });
+assert(
+  viewerMerge.merged.slides['id.p1']?.status === 'todo' &&
+    viewerMerge.remoteChanged === false,
+  'view-only merge must take remote statuses and never mark Drive for write',
+);
+
+const viewerApplied = applyReadOnlyRemoteDeck(viewerLocal, {
+  slides: viewerRemote,
+  idsByIndex: { '0': 'id.p1' },
+});
+assert(
+  viewerApplied.slides['id.p1']?.status === 'todo',
+  'view-only storage apply must not keep newer local status edits',
 );
 
 console.log('deck merge tests passed');

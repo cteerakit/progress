@@ -1,10 +1,11 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { injectGoogleSansLink } from '../utils/fonts';
-import { defineDeckBadge, createDeckBadge, DECK_BADGE_SELECTOR } from '../utils/badge';
+import { defineDeckBadge, createDeckBadge, DECK_BADGE_SELECTOR, type DeckBadgeElement } from '../utils/badge';
 import {
   defineStatusChip,
   createStatusChip,
   STATUS_CHIP_SELECTOR,
+  type StatusChipElement,
 } from '../utils/chip';
 import { getDeckCounts } from '../utils/counts';
 import {
@@ -43,15 +44,18 @@ import {
   getEffectiveSyncError,
   isGlobalSyncError,
   isSyncReady,
+  canEditPresentation,
 } from '../utils/sync-state';
 import {
   applyStorageDeckUpdate,
+  applyReadOnlyRemoteDeck,
   cloneDeck,
   indexSlideKey,
   isDriveSlideId,
   nextUpdatedAt,
   resetDeckStatuses,
   resolveSlideRecord,
+  type DeckState,
   type SlideStatus,
 } from '../utils/status';
 
@@ -84,11 +88,7 @@ export default defineContentScript({
     let pendingSlideCount: number | null = null;
     let pendingSlideCountTimer: number | null = null;
     let filmstripResizeObserver: ResizeObserver | null = null;
-    let badgeElement: (HTMLElement & {
-      setCounts: (counts: ReturnType<typeof getDeckCounts>) => void;
-      setSyncState: (state: SyncState) => void;
-      setLoading: (loading: boolean) => void;
-    }) | null = null;
+    let badgeElement: DeckBadgeElement | null = null;
 
     const chipFromIndex = (thumbnailIndex: number) => {
       if (!chipOverlay) return null;
@@ -96,10 +96,7 @@ export default defineContentScript({
         `[data-thumbnail-index="${thumbnailIndex}"]`,
       );
       return (anchor?.querySelector(STATUS_CHIP_SELECTOR) as
-        | (HTMLElement & {
-            setSlideKey: (slideKey: string) => void;
-            setStatus: (status: SlideStatus) => void;
-          })
+        | StatusChipElement
         | null) ?? null;
     };
 
@@ -172,6 +169,14 @@ export default defineContentScript({
       error: getEffectiveSyncError(syncState, presentationId),
     });
 
+    const canEditDeck = () => canEditPresentation(syncState, presentationId);
+
+    const applyIncomingDeck = (incoming: DeckState) => {
+      deck = canEditDeck()
+        ? applyStorageDeckUpdate(deck, incoming)
+        : applyReadOnlyRemoteDeck(deck, incoming);
+    };
+
     const updateBadgeLoading = () => {
       if (!badgeElement) {
         return;
@@ -196,12 +201,14 @@ export default defineContentScript({
 
         chip.setSlideKey(info.slideKey);
         chip.setStatus(resolveSlideRecord(deck, info.slideKey, info.index).status);
+        chip.setEditable(canEditDeck());
       }
 
       if (slideCount) {
         badgeElement?.setCounts(getDeckCounts(slideCount, deck, indexSlideKeys));
       }
       badgeElement?.setSyncState(badgeSyncState());
+      badgeElement?.setCanEdit(canEditDeck());
       updateBadgeLoading();
     };
 
@@ -273,7 +280,7 @@ export default defineContentScript({
       slideKey: string,
       status: SlideStatus,
     ) => {
-      if (!isSyncReady(syncState, presentationId)) {
+      if (!isSyncReady(syncState, presentationId) || !canEditDeck()) {
         return;
       }
 
@@ -310,15 +317,21 @@ export default defineContentScript({
       refreshUi();
       await persistLatestDeck();
       await persistChain;
-      await pushLocalDeck(presentationId);
+      const pushResult = await pushLocalDeck(presentationId);
+      applyPullResult(pushResult);
+      refreshUi();
     };
 
     const applyPullResult = (result: Awaited<ReturnType<typeof pullRemoteDeck>>) => {
       const signedIn = Boolean(result.signedIn ?? syncState.signedIn);
       const presentationErrors = { ...(syncState.presentationErrors ?? {}) };
+      const presentationCanEdit = { ...(syncState.presentationCanEdit ?? {}) };
 
       if (result.ok) {
         delete presentationErrors[presentationId];
+        if (typeof result.canEdit === 'boolean') {
+          presentationCanEdit[presentationId] = result.canEdit;
+        }
       } else if (result.error && !isGlobalSyncError(result.error)) {
         presentationErrors[presentationId] = result.error;
       }
@@ -333,6 +346,8 @@ export default defineContentScript({
               ? null
               : syncState.error,
         presentationErrors,
+        presentationCanEdit,
+        signedInEmail: syncState.signedInEmail,
       };
     };
 
@@ -341,10 +356,10 @@ export default defineContentScript({
         badgeElement?.setLoading(true);
       }
       try {
-        deck = applyStorageDeckUpdate(deck, await loadDeckInTab(presentationId));
+        applyIncomingDeck(await loadDeckInTab(presentationId));
         const pullResult = await pullRemoteDeck(presentationId);
         applyPullResult(pullResult);
-        deck = applyStorageDeckUpdate(deck, await loadDeckInTab(presentationId));
+        applyIncomingDeck(await loadDeckInTab(presentationId));
 
         if (!isSyncReady(syncState, presentationId)) {
           clearChips();
@@ -391,7 +406,7 @@ export default defineContentScript({
         await activateSignedInSession();
       },
       async () => {
-        if (!isSyncReady(syncState, presentationId)) {
+        if (!isSyncReady(syncState, presentationId) || !canEditDeck()) {
           return;
         }
 
@@ -399,7 +414,9 @@ export default defineContentScript({
         refreshUi();
         await persistLatestDeck();
         await persistChain;
-        await pushLocalDeck(presentationId);
+        const pushResult = await pushLocalDeck(presentationId);
+        applyPullResult(pushResult);
+        refreshUi();
       },
     );
 
@@ -467,27 +484,22 @@ export default defineContentScript({
           info.index,
         );
 
-        let chip = anchor.querySelector(STATUS_CHIP_SELECTOR) as
-          | (HTMLElement & {
-              setSlideKey: (slideKey: string) => void;
-              setStatus: (status: SlideStatus) => void;
-            })
-          | null;
+        let chip = anchor.querySelector(
+          STATUS_CHIP_SELECTOR,
+        ) as StatusChipElement | null;
 
         if (!chip) {
           chip = createStatusChip(
             info.slideKey,
             resolveSlideRecord(deck, info.slideKey, info.index).status,
-          ) as HTMLElement & {
-            setSlideKey: (slideKey: string) => void;
-            setStatus: (status: SlideStatus) => void;
-          };
+          );
           chip.dataset.slideKey = info.slideKey;
           anchor.append(chip);
         }
 
         chip.setSlideKey(info.slideKey);
         chip.setStatus(resolveSlideRecord(deck, info.slideKey, info.index).status);
+        chip.setEditable(canEditDeck());
       });
 
       repositionChips();
@@ -711,7 +723,7 @@ export default defineContentScript({
 
         const pullResult = await pullRemoteDeck(presentationId);
         applyPullResult(pullResult);
-        deck = applyStorageDeckUpdate(deck, await loadDeckInTab(presentationId));
+        applyIncomingDeck(await loadDeckInTab(presentationId));
 
         if (!isSyncReady(syncState, presentationId)) {
           clearChips();
@@ -730,7 +742,7 @@ export default defineContentScript({
     const unwatchDecks = onDecksChangedInTab((decks) => {
       const nextDeck = decks[presentationId];
       if (!nextDeck) return;
-      deck = applyStorageDeckUpdate(deck, nextDeck);
+      applyIncomingDeck(nextDeck);
       refreshUi();
     });
 

@@ -161,6 +161,15 @@ body {
   color: var(--color-muted);
 }
 
+.signed-in-email {
+  margin: 0;
+  padding-inline-start: 16px;
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .status-detail[data-tone="error"] {
   color: var(--color-error);
 }

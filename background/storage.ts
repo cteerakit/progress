@@ -1,7 +1,7 @@
 import { storage } from 'wxt/utils/storage';
 import type { DeckState } from '../utils/status';
-import { applyLocalDeckSave, createEmptyDeck } from '../utils/status';
-import type { SyncState } from '../utils/sync-state';
+import { applyLocalDeckSave, createEmptyDeck, pruneRedundantIndexSlides } from '../utils/status';
+import { canEditPresentation, type SyncState } from '../utils/sync-state';
 
 export const decksStorage = storage.defineItem<Record<string, DeckState>>(
   'local:decks',
@@ -44,8 +44,45 @@ export async function saveDeck(
   await withDecksLock(async () => {
     const decks = { ...(await decksStorage.getValue()) };
     const existing = decks[presentationId] ?? createEmptyDeck();
-    decks[presentationId] = applyLocalDeckSave(existing, deck);
+    const canEdit = canEditPresentation(await getSyncState(), presentationId);
+
+    if (!canEdit) {
+      decks[presentationId] = applyLocalDeckSave(existing, {
+        slides: existing.slides,
+        idsByIndex: deck.idsByIndex,
+      });
+    } else {
+      decks[presentationId] = applyLocalDeckSave(existing, deck);
+    }
     await decksStorage.setValue(decks);
+  });
+}
+
+export async function overwriteDeckSlides(
+  presentationId: string,
+  deck: DeckState,
+): Promise<void> {
+  await withDecksLock(async () => {
+    const decks = { ...(await decksStorage.getValue()) };
+    const existing = decks[presentationId] ?? createEmptyDeck();
+    decks[presentationId] = pruneRedundantIndexSlides({
+      slides: { ...deck.slides },
+      idsByIndex: { ...existing.idsByIndex, ...deck.idsByIndex },
+    });
+    await decksStorage.setValue(decks);
+  });
+}
+
+export async function setPresentationCanEdit(
+  presentationId: string,
+  canEdit: boolean,
+): Promise<void> {
+  const current = await getSyncState();
+  const presentationCanEdit = { ...(current.presentationCanEdit ?? {}) };
+  presentationCanEdit[presentationId] = canEdit;
+  await syncStateStorage.setValue({
+    ...current,
+    presentationCanEdit,
   });
 }
 

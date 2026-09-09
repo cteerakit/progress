@@ -52,10 +52,16 @@ export default defineConfig({
     description:
       'Track slide progress in Google Slides and sync with collaborators.',
     permissions: ['storage', 'identity', 'alarms'],
-    host_permissions: ['https://www.googleapis.com/drive/v3/*'],
+    host_permissions: [
+      'https://www.googleapis.com/drive/v3/*',
+      'https://www.googleapis.com/oauth2/v3/*',
+    ],
     oauth2: {
       client_id: oauthClientId,
-      scopes: ['https://www.googleapis.com/auth/drive.metadata'],
+      scopes: [
+        'https://www.googleapis.com/auth/drive.metadata',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
     },
     icons: {
       16: 'icons/icon-16.png',

@@ -1,10 +1,14 @@
 export interface SyncState {
   signedIn: boolean;
   lastSyncAt: number;
+  /** Google account email for the active OAuth session. */
+  signedInEmail?: string | null;
   /** Account- or auth-level failures only. */
   error: string | null;
   /** Per-presentation sync failures keyed by Drive file id. */
   presentationErrors?: Record<string, string>;
+  /** Per-presentation Drive edit capability. Missing means unknown (treat as editable). */
+  presentationCanEdit?: Record<string, boolean>;
 }
 
 export function getPresentationSyncError(
@@ -47,6 +51,13 @@ export function isSyncReady(
   }
 
   return !getPresentationSyncError(state, presentationId);
+}
+
+export function canEditPresentation(
+  state: SyncState,
+  presentationId: string,
+): boolean {
+  return state.presentationCanEdit?.[presentationId] !== false;
 }
 
 export function isGlobalSyncError(message: string): boolean {

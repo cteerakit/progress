@@ -158,18 +158,61 @@ const BADGE_STYLES = `
     background: #f6d5d3;
   }
 
-  .sync-error-message {
-    display: none;
-    max-width: 240px;
-    color: #c5221f;
-    font: 12px/1.3 ${GOOGLE_SANS_STACK};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .error-popover {
+    position: fixed;
+    position-anchor: --progress-badge;
+    top: anchor(bottom);
+    left: anchor(left);
+    position-try: flip-block;
+    margin: 6px 0 0;
+    max-width: 320px;
+    padding: 10px 12px;
+    border: 1px solid #dadce0;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+    color: #202124;
+    font: 12px/1.4 ${GOOGLE_SANS_STACK};
   }
 
-  .badge-wrap[data-has-error="true"] .sync-error-message {
-    display: block;
+  .error-popover[popover]:not(:popover-open) {
+    pointer-events: none;
+  }
+
+  .error-popover[hidden] {
+    display: none !important;
+    pointer-events: none;
+  }
+
+  .error-popover-message {
+    margin: 0 0 8px;
+    color: #c5221f;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .error-popover-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .error-copy-button {
+    padding: 4px 10px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    background: #fff;
+    color: #1a73e8;
+    font: 500 12px/1 ${GOOGLE_SANS_STACK};
+    cursor: pointer;
+  }
+
+  .error-copy-button:hover:not(:disabled) {
+    background: #f8f9fa;
+  }
+
+  .error-copy-button:disabled {
+    cursor: default;
+    opacity: 0.7;
   }
 
   .detail-panel {
@@ -195,13 +238,6 @@ const BADGE_STYLES = `
   .detail-panel[hidden] {
     display: none !important;
     pointer-events: none;
-  }
-
-  .detail-error {
-    grid-column: 1 / -1;
-    margin: 0;
-    color: #c5221f;
-    font: 12px/1.3 ${GOOGLE_SANS_STACK};
   }
 
   .detail-body {
@@ -260,6 +296,10 @@ const BADGE_STYLES = `
   .reset-button:disabled {
     color: #dadce0;
     cursor: default;
+  }
+
+  .reset-button[hidden] {
+    display: none;
   }
 
   .reset-icon {
@@ -375,6 +415,7 @@ export type DeckBadgeElement = HTMLElement & {
   setCounts: (counts: DeckCounts) => void;
   setSyncState: (syncState: SyncState) => void;
   setLoading: (loading: boolean) => void;
+  setCanEdit: (canEdit: boolean) => void;
 };
 
 export function defineDeckBadge(
@@ -386,7 +427,7 @@ export function defineDeckBadge(
 }
 
 export function createDeckBadge(): DeckBadgeElement {
-  const host = document.createElement('div') as DeckBadgeElement;
+  const host = document.createElement('div') as unknown as DeckBadgeElement;
   host.className = BADGE_CLASS;
 
   const shadow = host.attachShadow({ mode: 'open' });
@@ -404,6 +445,7 @@ export function createDeckBadge(): DeckBadgeElement {
     error: null,
   };
   let loading = true;
+  let canEdit = true;
 
   const wrap = document.createElement('div');
   wrap.className = 'badge-wrap';
@@ -509,25 +551,120 @@ export function createDeckBadge(): DeckBadgeElement {
 
   resetButton.addEventListener('click', (event) => {
     stopTitleBarInteraction(event);
+    if (!canEdit) {
+      return;
+    }
     openResetDialog();
   });
 
   resetDialog.addEventListener('close', () => {
     const value = resetDialog.returnValue;
     resetDialog.returnValue = '';
-    if (value === 'confirm') {
+    if (value === 'confirm' && canEdit) {
       void onResetAll();
     }
   });
-
-  const syncErrorMessage = document.createElement('span');
-  syncErrorMessage.className = 'sync-error-message';
 
   const syncButton = document.createElement('button');
   syncButton.type = 'button';
   syncButton.className = 'sync-button';
   syncButton.textContent = 'Sign in to use Progress';
+
+  const errorPopover = document.createElement('div');
+  errorPopover.className = 'error-popover';
+  errorPopover.id = `progress-error-${Math.random().toString(36).slice(2)}`;
+
+  const errorPopoverMessage = document.createElement('p');
+  errorPopoverMessage.className = 'error-popover-message';
+
+  const errorPopoverActions = document.createElement('div');
+  errorPopoverActions.className = 'error-popover-actions';
+
+  const errorCopyButton = document.createElement('button');
+  errorCopyButton.type = 'button';
+  errorCopyButton.className = 'error-copy-button';
+  errorCopyButton.textContent = 'Copy';
+
+  errorPopoverActions.append(errorCopyButton);
+  errorPopover.append(errorPopoverMessage, errorPopoverActions);
+
+  let errorPopoverHideTimer: number | undefined;
+  let copyResetTimer: number | undefined;
+
+  const setErrorPopoverOpen = (open: boolean) => {
+    if (!syncState.error) {
+      open = false;
+    }
+
+    window.clearTimeout(errorPopoverHideTimer);
+
+    if (supportsPopoverToggle()) {
+      if (open) {
+        showPanel(errorPopover);
+      } else {
+        hidePanel(errorPopover);
+      }
+      return;
+    }
+
+    errorPopover.hidden = !open;
+  };
+
+  const scheduleErrorPopoverHide = () => {
+    window.clearTimeout(errorPopoverHideTimer);
+    errorPopoverHideTimer = window.setTimeout(() => {
+      setErrorPopoverOpen(false);
+    }, 120);
+  };
+
+  const showErrorPopover = () => {
+    if (!syncState.error || loading) {
+      return;
+    }
+    setErrorPopoverOpen(true);
+  };
+
+  if (supportsPopoverToggle()) {
+    errorPopover.setAttribute('popover', 'manual');
+  } else {
+    errorPopover.hidden = true;
+  }
+
+  syncButton.addEventListener('mouseenter', showErrorPopover);
+  syncButton.addEventListener('mouseleave', scheduleErrorPopoverHide);
+  syncButton.addEventListener('focus', showErrorPopover);
+  syncButton.addEventListener('blur', scheduleErrorPopoverHide);
+
+  errorPopover.addEventListener('mouseenter', showErrorPopover);
+  errorPopover.addEventListener('mouseleave', scheduleErrorPopoverHide);
+
+  errorCopyButton.addEventListener('click', async (event) => {
+    stopTitleBarInteraction(event);
+    if (!syncState.error) {
+      return;
+    }
+
+    errorCopyButton.disabled = true;
+    try {
+      await navigator.clipboard.writeText(syncState.error);
+      errorCopyButton.textContent = 'Copied';
+      window.clearTimeout(copyResetTimer);
+      copyResetTimer = window.setTimeout(() => {
+        errorCopyButton.textContent = 'Copy';
+        errorCopyButton.disabled = false;
+      }, 1500);
+    } catch {
+      errorCopyButton.textContent = 'Copy failed';
+      window.clearTimeout(copyResetTimer);
+      copyResetTimer = window.setTimeout(() => {
+        errorCopyButton.textContent = 'Copy';
+        errorCopyButton.disabled = false;
+      }, 1500);
+    }
+  });
+
   syncButton.addEventListener('click', async () => {
+    setErrorPopoverOpen(false);
     syncButton.disabled = true;
     syncButton.textContent = syncState.signedIn ? 'Retrying...' : 'Signing in...';
     try {
@@ -591,6 +728,7 @@ export function createDeckBadge(): DeckBadgeElement {
   for (const eventName of ['pointerdown', 'mousedown'] as const) {
     percentButton.addEventListener(eventName, stopTitleBarInteraction);
     detailPanel.addEventListener(eventName, stopTitleBarInteraction);
+    errorPopover.addEventListener(eventName, stopTitleBarInteraction);
     resetDialog.addEventListener(eventName, stopTitleBarInteraction);
   }
 
@@ -601,6 +739,7 @@ export function createDeckBadge(): DeckBadgeElement {
 
     if (loading) {
       setPanelOpen(false);
+      setErrorPopoverOpen(false);
     }
 
     const isComplete = counts.percent === 100;
@@ -614,13 +753,6 @@ export function createDeckBadge(): DeckBadgeElement {
     );
 
     detailBody.replaceChildren();
-
-    if (syncState.error) {
-      const errorLine = document.createElement('p');
-      errorLine.className = 'detail-error';
-      errorLine.textContent = syncState.error;
-      detailBody.append(errorLine);
-    }
 
     for (const row of counts.rows) {
       const line = document.createElement('div');
@@ -648,20 +780,25 @@ export function createDeckBadge(): DeckBadgeElement {
 
     const isReady = syncState.signedIn && !syncState.error;
     wrap.dataset.mode = isReady ? 'ready' : 'blocked';
-    wrap.dataset.hasError = syncState.error ? 'true' : 'false';
 
     if (syncState.error) {
-      syncErrorMessage.textContent = syncState.error;
-      syncErrorMessage.title = syncState.error;
+      errorPopoverMessage.textContent = syncState.error;
+      errorCopyButton.disabled = false;
+      errorCopyButton.textContent = 'Copy';
     } else {
-      syncErrorMessage.textContent = '';
-      syncErrorMessage.removeAttribute('title');
+      errorPopoverMessage.textContent = '';
+      setErrorPopoverOpen(false);
     }
 
     const noneCount =
       counts.rows.find((row) => row.status === 'none')?.count ?? 0;
     const hasAssignedStatuses = counts.total > 0 && noneCount < counts.total;
-    resetButton.disabled = loading || !isReady || !hasAssignedStatuses;
+    resetButton.hidden = !canEdit;
+    resetButton.disabled = loading || !isReady || !hasAssignedStatuses || !canEdit;
+    if (!canEdit && resetDialog.open) {
+      resetDialog.returnValue = 'cancel';
+      resetDialog.close();
+    }
 
     if (!syncState.signedIn) {
       syncButton.dataset.state = 'signed-out';
@@ -671,7 +808,9 @@ export function createDeckBadge(): DeckBadgeElement {
       syncButton.disabled = false;
       syncButton.setAttribute(
         'aria-label',
-        'Sign in to use Progress',
+        syncState.error
+          ? `Sign-in failed: ${syncState.error}. Hover for details. Click to retry`
+          : 'Sign in to use Progress',
       );
     } else if (syncState.error) {
       syncButton.dataset.state = 'error';
@@ -679,7 +818,7 @@ export function createDeckBadge(): DeckBadgeElement {
       syncButton.disabled = false;
       syncButton.setAttribute(
         'aria-label',
-        `Sync error: ${syncState.error}. Click to retry`,
+        `Sync error: ${syncState.error}. Hover for details. Click to retry`,
       );
     } else {
       syncButton.dataset.state = 'synced';
@@ -701,8 +840,12 @@ export function createDeckBadge(): DeckBadgeElement {
     loading = nextLoading;
     render();
   };
+  host.setCanEdit = (nextCanEdit) => {
+    canEdit = nextCanEdit;
+    render();
+  };
 
-  wrap.append(percentButton, syncButton, syncErrorMessage, detailPanel);
+  wrap.append(percentButton, syncButton, detailPanel, errorPopover);
   shadow.append(wrap, resetDialog);
   render();
   return host;

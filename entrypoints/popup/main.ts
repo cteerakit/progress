@@ -16,6 +16,7 @@ function requireElement<T extends HTMLElement>(
 
 const statusDot = requireElement('status-dot', HTMLElement);
 const statusLabel = requireElement('status-label', HTMLElement);
+const signedInEmail = requireElement('signed-in-email', HTMLElement);
 const statusDetail = requireElement('status-detail', HTMLElement);
 const signInButton = requireElement('sign-in', HTMLButtonElement);
 const signOutButton = requireElement('sign-out', HTMLButtonElement);
@@ -48,11 +49,23 @@ function setBusy(busy: boolean): void {
   signOutButton.disabled = busy;
 }
 
+function setSignedInEmail(state: SyncState): void {
+  if (state.signedIn && state.signedInEmail) {
+    signedInEmail.hidden = false;
+    signedInEmail.textContent = state.signedInEmail;
+    return;
+  }
+
+  signedInEmail.hidden = true;
+  signedInEmail.textContent = '';
+}
+
 function render(state: SyncState): void {
   const syncError = getAnySyncError(state);
 
   signInButton.hidden = state.signedIn;
   signOutButton.hidden = !state.signedIn;
+  setSignedInEmail(state);
 
   if (!state.signedIn) {
     statusDot.dataset.state = syncError ? 'error' : 'signed-out';
