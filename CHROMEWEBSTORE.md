@@ -96,6 +96,8 @@ FEATURES
 
 • Toolbar popup showing sync status, last synced time, sign-in, and sign-out
 
+• Side panel showing status history for the active slide
+
 
 
 HOW TO USE

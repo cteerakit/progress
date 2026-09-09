@@ -1,4 +1,6 @@
+import type { ActiveSlideState } from './active-slide';
 import { parseSlideId, type DeckState } from './status';
+import type { StatusPresetConfig } from './status-presets';
 import { getChromeRuntime } from './extension-api';
 
 export type BackgroundMessage =
@@ -10,10 +12,24 @@ export type BackgroundMessage =
   | { type: 'WATCH'; presentationId: string }
   | { type: 'UNWATCH'; presentationId: string }
   | { type: 'LOAD_DECK'; presentationId: string }
-  | { type: 'SAVE_DECK'; presentationId: string; deck: DeckState };
+  | { type: 'SAVE_DECK'; presentationId: string; deck: DeckState }
+  | { type: 'LOAD_PRESETS'; presentationId: string }
+  | {
+      type: 'SAVE_PRESETS';
+      presentationId: string;
+      presets: StatusPresetConfig;
+      updateTemplate?: boolean;
+    }
+  | { type: 'SET_ACTIVE_SLIDE'; state: ActiveSlideState | null };
 
 export type BackgroundResponse =
-  | { ok: true; signedIn?: boolean; canEdit?: boolean; deck?: DeckState }
+  | {
+      ok: true;
+      signedIn?: boolean;
+      canEdit?: boolean;
+      deck?: DeckState;
+      presets?: StatusPresetConfig;
+    }
   | { ok: false; error: string; signedIn?: boolean };
 
 export async function sendBackgroundMessage(
@@ -67,6 +83,33 @@ export async function watchPresentation(presentationId: string): Promise<void> {
 
 export async function unwatchPresentation(presentationId: string): Promise<void> {
   await sendBackgroundMessage({ type: 'UNWATCH', presentationId });
+}
+
+export async function loadPresetsInTab(
+  presentationId: string,
+): Promise<StatusPresetConfig | null> {
+  const response = await sendBackgroundMessage({
+    type: 'LOAD_PRESETS',
+    presentationId,
+  });
+  if (!response.ok || !response.presets) {
+    return null;
+  }
+  return response.presets;
+}
+
+export async function persistPresetsInTab(
+  presentationId: string,
+  presets: StatusPresetConfig,
+  updateTemplate = false,
+): Promise<boolean> {
+  const response = await sendBackgroundMessage({
+    type: 'SAVE_PRESETS',
+    presentationId,
+    presets,
+    updateTemplate,
+  });
+  return response.ok;
 }
 
 export function presentationIdFromUrl(url: string): string | null {

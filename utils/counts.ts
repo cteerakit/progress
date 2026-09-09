@@ -1,5 +1,7 @@
 import type { DeckState, SlideRecord, SlideStatus } from './status';
-import { indexSlideKey, resolveSlideRecord, STATUS_ORDER } from './status';
+import { indexSlideKey, resolveSlideRecord } from './status';
+import type { StatusPresetConfig } from './status-presets';
+import { DEFAULT_STATUS_PRESET_CONFIG, getPresetLabel } from './status-presets';
 
 export interface SlideCountRow {
   status: SlideStatus;
@@ -13,14 +15,6 @@ export interface DeckCounts {
   percent: number;
   rows: SlideCountRow[];
 }
-
-const COUNT_LABELS: Record<SlideStatus, string> = {
-  none: 'No status',
-  todo: 'To do',
-  'in-progress': 'In progress',
-  'need-attention': 'Need attention',
-  done: 'Done',
-};
 
 function getStatusForDeckIndex(
   deck: DeckState,
@@ -42,27 +36,44 @@ export function getDeckCounts(
   slideCount: number,
   deck: DeckState,
   indexSlideKeys: Record<string, string> = deck.idsByIndex,
+  presets: StatusPresetConfig = DEFAULT_STATUS_PRESET_CONFIG,
 ): DeckCounts {
-  const counts: Record<SlideStatus, number> = {
-    none: 0,
-    todo: 0,
-    'in-progress': 0,
-    'need-attention': 0,
-    done: 0,
-  };
+  const counts = new Map<string, number>();
+  for (const preset of presets.statuses) {
+    counts.set(preset.id, 0);
+  }
+
   for (let index = 0; index < slideCount; index += 1) {
     const record = getStatusForDeckIndex(deck, index, indexSlideKeys);
-    counts[record.status] += 1;
+    counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
   }
 
   const total = slideCount;
-  const done = counts.done;
+  const done = presets.completeStatusIds.reduce(
+    (sum, statusId) => sum + (counts.get(statusId) ?? 0),
+    0,
+  );
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
 
-  const rows: SlideCountRow[] = STATUS_ORDER.map((status) => ({
-    status,
-    label: COUNT_LABELS[status],
-    count: counts[status],
+  const rows: SlideCountRow[] = presets.statuses.map((preset) => ({
+    status: preset.id,
+    label: getPresetLabel(presets, preset.id),
+    count: counts.get(preset.id) ?? 0,
   }));
+
+  const unknownStatuses = [...counts.keys()].filter(
+    (statusId) => !presets.statuses.some((preset) => preset.id === statusId),
+  );
+  for (const statusId of unknownStatuses) {
+    if (statusId === 'none') {
+      continue;
+    }
+    rows.push({
+      status: statusId,
+      label: 'Unknown',
+      count: counts.get(statusId) ?? 0,
+    });
+  }
+
   return { total, done, percent, rows };
 }

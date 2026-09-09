@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap"
+    />
+    <title>Progress for Google Slides</title>
+  </head>
+  <body>
+    <main class="panel">
+      <nav class="nav" aria-label="Side panel sections">
+        <button
+          type="button"
+          id="nav-history"
+          class="nav-button is-active"
+          aria-current="page"
+        >
+          History
+        </button>
+        <button type="button" id="nav-statuses" class="nav-button">
+          Statuses
+        </button>
+        <button type="button" id="nav-account" class="nav-button">
+          Account
+        </button>
+      </nav>
+
+      <section id="history-view" class="view" aria-labelledby="history-heading">
+        <div class="history-header">
+          <h2 id="history-heading" class="section-title">Status history</h2>
+          <p id="history-summary" class="history-summary"></p>
+        </div>
+        <ol id="history-list" class="history-list" hidden></ol>
+        <button
+          type="button"
+          id="history-load-more"
+          class="button button-secondary history-load-more"
+          hidden
+        >
+          Load more
+        </button>
+        <p id="history-empty" class="history-empty">Open a Google Slides tab to view status history.</p>
+      </section>
+
+      <section id="statuses-view" class="view" hidden aria-labelledby="statuses-heading">
+        <h2 id="statuses-heading" class="section-title">Customize statuses</h2>
+        <p id="statuses-empty" class="history-empty">
+          Open a Google Slides presentation to customize statuses.
+        </p>
+        <div id="statuses-editor" class="statuses-editor" hidden></div>
+      </section>
+
+      <section id="account-view" class="view" hidden aria-labelledby="account-heading">
+        <h2 id="account-heading" class="section-title">Account</h2>
+
+        <section class="status" aria-live="polite">
+          <p class="status-line">
+            <span id="status-dot" class="status-dot" data-state="unknown" aria-hidden="true"></span>
+            <span id="status-label">Checking sync…</span>
+          </p>
+          <p id="signed-in-email" class="signed-in-email" hidden></p>
+          <p id="status-detail" class="status-detail"></p>
+        </section>
+
+        <div class="actions">
+          <button type="button" id="sign-in" class="button button-primary" hidden>
+            Sign in
+          </button>
+          <button type="button" id="sign-out" class="button button-secondary" hidden>
+            Sign out
+          </button>
+        </div>
+
+        <footer class="footer">
+          <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          <span class="footer-separator" aria-hidden="true">·</span>
+          <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+        </footer>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

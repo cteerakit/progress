@@ -51,8 +51,10 @@ export default defineConfig({
     name: 'Progress for Google Slides',
     description:
       'Track slide progress in Google Slides and sync with collaborators.',
-    permissions: ['storage', 'identity', 'alarms'],
+    permissions: ['storage', 'identity', 'alarms', 'sidePanel'],
+    action: {},
     host_permissions: [
+      'https://docs.google.com/*',
       'https://slides.googleapis.com/*',
       'https://www.googleapis.com/oauth2/v3/*',
     ],
@@ -61,6 +63,7 @@ export default defineConfig({
       scopes: [
         'https://www.googleapis.com/auth/presentations',
         'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile',
       ],
     },
     icons: {

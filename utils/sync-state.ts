@@ -3,11 +3,13 @@ export interface SyncState {
   lastSyncAt: number;
   /** Google account email for the active OAuth session. */
   signedInEmail?: string | null;
+  /** Google account profile photo URL for the active OAuth session. */
+  signedInPicture?: string | null;
   /** Account- or auth-level failures only. */
   error: string | null;
   /** Per-presentation sync failures keyed by presentation id. */
   presentationErrors?: Record<string, string>;
-  /** Per-presentation edit capability. Missing means unknown (treat as editable). */
+  /** Per-presentation edit capability. Missing means unknown. */
   presentationCanEdit?: Record<string, boolean>;
 }
 
@@ -53,11 +55,18 @@ export function isSyncReady(
   return !getPresentationSyncError(state, presentationId);
 }
 
+export function isEditAccessKnown(
+  state: SyncState,
+  presentationId: string,
+): boolean {
+  return state.presentationCanEdit?.[presentationId] !== undefined;
+}
+
 export function canEditPresentation(
   state: SyncState,
   presentationId: string,
 ): boolean {
-  return state.presentationCanEdit?.[presentationId] !== false;
+  return state.presentationCanEdit?.[presentationId] === true;
 }
 
 export function isGlobalSyncError(message: string): boolean {

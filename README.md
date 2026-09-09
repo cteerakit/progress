@@ -4,7 +4,7 @@
 
 **[Install from Chrome Web Store](https://chromewebstore.google.com/detail/mgebbidbnfnomiilkimbiplmkafccmpf)**
 
-A Chrome extension for Google Slides that lets you assign **No status**, **To do**, **In progress**, **Need attention**, and **Done** to each slide from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via hidden marker shapes on each slide.
+A Chrome extension for Google Slides that lets you assign slide statuses from the filmstrip, track overall completion in the title bar, and sync statuses with collaborators via hidden marker shapes on each slide. Customize the status preset (icon, color, label, order, add/remove) from the side panel; presets sync to collaborators through a hidden catalog marker on the presentation.
 
 
 
@@ -22,13 +22,15 @@ Built with [WXT](https://wxt.dev) and Manifest V3.
 
 - Title-bar progress badge showing completion percentage
 
-- Hover breakdown of counts per status, with a confirmation dialog to reset all slides to No status
+- Hover breakdown of counts per status, with a control to reset all slides to No status
+- Side panel to customize status presets and view per-slide status history
 
 - Local cache for instant UI
 
 - Collaborator sync through the Google Slides API (requires sign-in), with background `chrome.alarms` polling
 
 - Toolbar popup with sync status and sign-out
+- Side panel with per-slide status history for the active slide
 
 
 

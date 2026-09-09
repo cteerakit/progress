@@ -1,7 +1,18 @@
 import { storage } from 'wxt/utils/storage';
 import type { DeckState } from '../utils/status';
 import { applyLocalDeckSave, createEmptyDeck, pruneRedundantIndexSlides } from '../utils/status';
+import {
+  cloneStatusPresetConfig,
+  DEFAULT_STATUS_PRESET_CONFIG,
+  validateStatusPresetConfig,
+  type StatusPresetConfig,
+} from '../utils/status-presets';
 import { canEditPresentation, type SyncState } from '../utils/sync-state';
+import {
+  cloneUserCatalog,
+  createEmptyUserCatalog,
+  type UserCatalog,
+} from '../utils/user-catalog';
 
 export const decksStorage = storage.defineItem<Record<string, DeckState>>(
   'local:decks',
@@ -18,6 +29,19 @@ export const syncStateStorage = storage.defineItem<SyncState>(
     },
   },
 );
+
+export const statusPresetTemplateStorage =
+  storage.defineItem<StatusPresetConfig>('local:statusPresetTemplate', {
+    fallback: DEFAULT_STATUS_PRESET_CONFIG,
+  });
+
+export const statusPresetsByPresentationStorage = storage.defineItem<
+  Record<string, StatusPresetConfig>
+>('local:statusPresetsByPresentation', { fallback: {} });
+
+export const usersByPresentationStorage = storage.defineItem<
+  Record<string, UserCatalog>
+>('local:usersByPresentation', { fallback: {} });
 
 let decksLock: Promise<void> = Promise.resolve();
 
@@ -133,5 +157,83 @@ export function watchSyncState(callback: (state: SyncState) => void): () => void
         error: null,
       },
     );
+  });
+}
+
+export async function getStatusPresetTemplate(): Promise<StatusPresetConfig> {
+  return validateStatusPresetConfig(await statusPresetTemplateStorage.getValue());
+}
+
+export async function setStatusPresetTemplate(
+  config: StatusPresetConfig,
+): Promise<void> {
+  await statusPresetTemplateStorage.setValue(
+    validateStatusPresetConfig(config),
+  );
+}
+
+export async function getPresentationStatusPresets(
+  presentationId: string,
+): Promise<StatusPresetConfig> {
+  const byPresentation = await statusPresetsByPresentationStorage.getValue();
+  const cached = byPresentation[presentationId];
+  if (cached) {
+    return validateStatusPresetConfig(cached);
+  }
+  return cloneStatusPresetConfig(await getStatusPresetTemplate());
+}
+
+export async function setPresentationStatusPresets(
+  presentationId: string,
+  config: StatusPresetConfig,
+): Promise<void> {
+  const byPresentation = {
+    ...(await statusPresetsByPresentationStorage.getValue()),
+  };
+  byPresentation[presentationId] = validateStatusPresetConfig(config);
+  await statusPresetsByPresentationStorage.setValue(byPresentation);
+}
+
+export function watchPresentationStatusPresets(
+  callback: (presets: Record<string, StatusPresetConfig>) => void,
+): () => void {
+  return statusPresetsByPresentationStorage.watch((value) => {
+    callback(value ?? {});
+  });
+}
+
+export function watchStatusPresetTemplate(
+  callback: (config: StatusPresetConfig) => void,
+): () => void {
+  return statusPresetTemplateStorage.watch((value) => {
+    callback(validateStatusPresetConfig(value ?? DEFAULT_STATUS_PRESET_CONFIG));
+  });
+}
+
+export async function getPresentationUsers(
+  presentationId: string,
+): Promise<UserCatalog> {
+  const byPresentation = await usersByPresentationStorage.getValue();
+  return cloneUserCatalog(
+    byPresentation[presentationId] ?? createEmptyUserCatalog(),
+  );
+}
+
+export async function setPresentationUsers(
+  presentationId: string,
+  catalog: UserCatalog,
+): Promise<void> {
+  const byPresentation = {
+    ...(await usersByPresentationStorage.getValue()),
+  };
+  byPresentation[presentationId] = cloneUserCatalog(catalog);
+  await usersByPresentationStorage.setValue(byPresentation);
+}
+
+export function watchPresentationUsers(
+  callback: (users: Record<string, UserCatalog>) => void,
+): () => void {
+  return usersByPresentationStorage.watch((value) => {
+    callback(value ?? {});
   });
 }

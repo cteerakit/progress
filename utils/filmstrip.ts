@@ -194,6 +194,22 @@ export function getThumbnailGlobalIndex(
   return fallbackIndex;
 }
 
+export function getSelectedThumbnailInfo(
+  thumbnails: ThumbnailInfo[],
+  hashId: string | null = slideIdFromHash(window.location.hash),
+): ThumbnailInfo | null {
+  const selected = thumbnails.find((info) => isThumbnailSelected(info.element));
+  if (selected) {
+    return selected;
+  }
+
+  if (hashId) {
+    return thumbnails.find((info) => info.slideKey === hashId) ?? null;
+  }
+
+  return null;
+}
+
 export function buildThumbnailInfos(
   filmstrip: ParentNode,
   idsByIndex: Record<string, string>,

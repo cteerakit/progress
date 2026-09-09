@@ -1,13 +1,31 @@
-export type SlideStatus =
-  | 'none'
-  | 'todo'
-  | 'in-progress'
-  | 'need-attention'
-  | 'done';
+import {
+  appendSlideLogEntry,
+  mergeSlideRecords,
+  slideRecordHasHistory,
+  slideRecordsEqual,
+} from './slide-log';
+import {
+  DEFAULT_STATUS_PRESET_CONFIG,
+  getPresetColor,
+  getPresetIcon,
+  getPresetLabel,
+  getOrderedSelectablePresets,
+  type StatusPresetConfig,
+} from './status-presets';
+
+/** Stable status id: built-in (`todo`, `done`, …) or custom (`s_…`). */
+export type SlideStatus = string;
+
+export interface SlideLogEntry {
+  status: SlideStatus;
+  updatedAt: number;
+  updatedBy?: number;
+}
 
 export interface SlideRecord {
   status: SlideStatus;
   updatedAt: number;
+  log?: SlideLogEntry[];
 }
 
 export interface DeckState {
@@ -15,35 +33,7 @@ export interface DeckState {
   idsByIndex: Record<string, string>;
 }
 
-export const STATUS_OPTIONS: { value: SlideStatus; label: string }[] = [
-  { value: 'none', label: 'No status' },
-  { value: 'todo', label: 'To do' },
-  { value: 'in-progress', label: 'In progress' },
-  { value: 'need-attention', label: 'Need attention' },
-  { value: 'done', label: 'Done' },
-];
-
-export const STATUS_ORDER: SlideStatus[] = STATUS_OPTIONS.map(
-  (option) => option.value,
-);
-
-export const STATUS_COLORS: Record<SlideStatus, string> = {
-  none: '#9aa0a6',
-  todo: '#fbbc05',
-  'in-progress': '#4285f4',
-  'need-attention': '#ea4335',
-  done: '#34a853',
-};
-
-export const STATUS_ICONS: Record<SlideStatus, string> = {
-  none: 'radio_button_unchecked',
-  todo: 'circle_circle',
-  'in-progress': 'radio_button_partial',
-  'need-attention': 'error',
-  done: 'radio_button_checked',
-};
-
-export const STATUS_CODES: Record<SlideStatus, string> = {
+export const STATUS_CODES: Record<string, string> = {
   none: 'n',
   todo: 't',
   'in-progress': 'i',
@@ -64,8 +54,63 @@ export function codeToStatus(code: string): SlideStatus {
 }
 
 export function statusToCode(status: SlideStatus): string {
-  return STATUS_CODES[status];
+  return STATUS_CODES[status] ?? status;
 }
+
+export function getStatusOptions(
+  config: StatusPresetConfig = DEFAULT_STATUS_PRESET_CONFIG,
+): { value: SlideStatus; label: string }[] {
+  return getOrderedSelectablePresets(config).map((preset) => ({
+    value: preset.id,
+    label: preset.label,
+  }));
+}
+
+export function getStatusOrder(
+  config: StatusPresetConfig = DEFAULT_STATUS_PRESET_CONFIG,
+): SlideStatus[] {
+  return getOrderedSelectablePresets(config).map((preset) => preset.id);
+}
+
+export function getStatusColors(
+  config: StatusPresetConfig = DEFAULT_STATUS_PRESET_CONFIG,
+): Record<string, string> {
+  const colors: Record<string, string> = {};
+  for (const preset of config.statuses) {
+    colors[preset.id] = preset.color;
+  }
+  return colors;
+}
+
+export function getStatusColor(
+  config: StatusPresetConfig,
+  statusId: SlideStatus,
+): string {
+  return getPresetColor(config, statusId);
+}
+
+export function getStatusLabel(
+  config: StatusPresetConfig,
+  statusId: SlideStatus,
+): string {
+  return getPresetLabel(config, statusId);
+}
+
+export function getStatusIconId(
+  config: StatusPresetConfig,
+  statusId: SlideStatus,
+): string {
+  return getPresetIcon(config, statusId);
+}
+
+/** @deprecated Use getStatusOptions(config) */
+export const STATUS_OPTIONS = getStatusOptions();
+
+/** @deprecated Use getStatusOrder(config) */
+export const STATUS_ORDER = getStatusOrder();
+
+/** @deprecated Use getStatusColors(config) */
+export const STATUS_COLORS = getStatusColors();
 
 export function createEmptyDeck(): DeckState {
   return { slides: {}, idsByIndex: {} };
@@ -170,20 +215,68 @@ export function uniqueIndexMappings(
 }
 
 export function parseStatusCode(code: string): SlideStatus | null {
-  return CODE_TO_STATUS[code] ?? null;
+  if (CODE_TO_STATUS[code]) {
+    return CODE_TO_STATUS[code];
+  }
+  return null;
+}
+
+export function parseStatusToken(token: string): SlideStatus | null {
+  if (CODE_TO_STATUS[token]) {
+    return CODE_TO_STATUS[token];
+  }
+  if (token && token !== 'none') {
+    return token;
+  }
+  if (token === 'none') {
+    return 'none';
+  }
+  return null;
+}
+
+export function reassignDeckStatus(
+  deck: DeckState,
+  fromStatus: SlideStatus,
+  toStatus: SlideStatus,
+  updatedBy?: number,
+): DeckState {
+  const now = Math.floor(Date.now() / 1000);
+  const slides: Record<string, SlideRecord> = { ...deck.slides };
+
+  for (const [key, record] of Object.entries(slides)) {
+    if (record.status === fromStatus) {
+      slides[key] = appendSlideLogEntry(record, {
+        status: toStatus,
+        updatedAt: nextUpdatedAt(record.updatedAt, now),
+        updatedBy,
+      });
+    }
+  }
+
+  return {
+    slides,
+    idsByIndex: { ...deck.idsByIndex },
+  };
 }
 
 export function nextUpdatedAt(previous = 0, now = Math.floor(Date.now() / 1000)): number {
   return Math.max(now, previous + 1);
 }
 
-export function resetDeckStatuses(deck: DeckState): DeckState {
+export function resetDeckStatuses(
+  deck: DeckState,
+  updatedBy?: number,
+): DeckState {
   const now = Math.floor(Date.now() / 1000);
   const slides: Record<string, SlideRecord> = { ...deck.slides };
 
   for (const [key, record] of Object.entries(slides)) {
     if (record.status !== 'none') {
-      slides[key] = { status: 'none', updatedAt: nextUpdatedAt(record.updatedAt, now) };
+      slides[key] = appendSlideLogEntry(record, {
+        status: 'none',
+        updatedAt: nextUpdatedAt(record.updatedAt, now),
+        updatedBy,
+      });
     }
   }
 
@@ -260,17 +353,43 @@ export function mergeSlideMaps(
       continue;
     }
 
-    if (incomingRecord.updatedAt > current.updatedAt) {
-      merged[key] = incomingRecord;
-    } else if (
-      incomingRecord.updatedAt === current.updatedAt &&
-      onTie === 'use-incoming'
-    ) {
-      merged[key] = incomingRecord;
-    }
+    merged[key] = mergeSlideRecords(current, incomingRecord, onTie);
   }
 
   return merged;
+}
+
+/** Drop id.* slide records and index mappings for pages no longer in the deck. */
+export function pruneDeckToExistingSlides(
+  deck: DeckState,
+  validSlideKeys: ReadonlySet<string>,
+): DeckState {
+  const slides = { ...deck.slides };
+  const idsByIndex = { ...deck.idsByIndex };
+  let changed = false;
+
+  for (const key of Object.keys(slides)) {
+    if (isDriveSlideId(key) && !validSlideKeys.has(key)) {
+      delete slides[key];
+      changed = true;
+    }
+  }
+
+  for (const [index, slideId] of Object.entries(idsByIndex)) {
+    if (isDriveSlideId(slideId) && !validSlideKeys.has(slideId)) {
+      delete idsByIndex[index];
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return deck;
+  }
+
+  return {
+    slides,
+    idsByIndex: uniqueIndexMappings(idsByIndex),
+  };
 }
 
 export function pruneRedundantIndexSlides(deck: DeckState): DeckState {
@@ -351,7 +470,7 @@ function slideMapsDiffer(
     if (!a || !b) {
       return Boolean(a) !== Boolean(b);
     }
-    if (a.status !== b.status || a.updatedAt !== b.updatedAt) {
+    if (!slideRecordsEqual(a, b)) {
       return true;
     }
   }
@@ -361,7 +480,10 @@ function slideMapsDiffer(
 export function mergeDeckStates(
   local: DeckState,
   remoteSlides: Record<string, SlideRecord>,
-  options: { canEdit?: boolean } = {},
+  options: {
+    canEdit?: boolean;
+    validSlideKeys?: ReadonlySet<string>;
+  } = {},
 ): { merged: DeckState; localChanged: boolean; remoteChanged: boolean } {
   if (options.canEdit === false) {
     return {
@@ -392,22 +514,35 @@ export function mergeDeckStates(
     }
 
     if (!remoteRecord) {
-      if (localRecord && localRecord.status !== 'none') {
+      if (
+        localRecord &&
+        slideRecordHasHistory(localRecord) &&
+        (!options.validSlideKeys || options.validSlideKeys.has(slideKey))
+      ) {
         remoteChanged = true;
       }
       continue;
     }
 
-    if (!localRecord || remoteRecord.updatedAt > localRecord.updatedAt) {
+    if (!localRecord) {
       mergedSlides[slideKey] = remoteRecord;
-      if (
-        !localRecord ||
-        localRecord.status !== remoteRecord.status ||
-        localRecord.updatedAt !== remoteRecord.updatedAt
-      ) {
+      localChanged = true;
+      continue;
+    }
+
+    if (remoteRecord.updatedAt > localRecord.updatedAt) {
+      mergedSlides[slideKey] = mergeSlideRecords(localRecord, remoteRecord, 'use-incoming');
+      if (!slideRecordsEqual(localRecord, mergedSlides[slideKey])) {
         localChanged = true;
       }
     } else if (localRecord.updatedAt > remoteRecord.updatedAt) {
+      mergedSlides[slideKey] = mergeSlideRecords(localRecord, remoteRecord, 'keep-base');
+      if (!slideRecordsEqual(remoteRecord, mergedSlides[slideKey])) {
+        remoteChanged = true;
+      }
+    } else if (!slideRecordsEqual(localRecord, remoteRecord)) {
+      mergedSlides[slideKey] = mergeSlideRecords(localRecord, remoteRecord, 'keep-base');
+      localChanged = true;
       remoteChanged = true;
     }
   }

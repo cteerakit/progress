@@ -1,5 +1,5 @@
 export const PRESENTATION_FIELDS =
-  'revisionId,slides(objectId,pageElements(objectId,title,description))';
+  'revisionId,slides(objectId,pageElements(objectId,title,description)),notesMaster(objectId,pageElements(objectId,title,description)),masters(objectId,pageElements(objectId,title,description))';
 
 export interface SlidesPageElement {
   objectId: string;
@@ -15,6 +15,8 @@ export interface SlidesPage {
 export interface SlidesPresentation {
   revisionId?: string;
   slides?: SlidesPage[];
+  notesMaster?: SlidesPage;
+  masters?: SlidesPage[];
 }
 
 export type SlidesBatchRequest = Record<string, unknown>;
@@ -85,6 +87,41 @@ export async function batchUpdatePresentationChunked(
     const chunk = requests.slice(index, index + chunkSize);
     await batchUpdatePresentation(token, presentationId, chunk);
   }
+}
+
+/** Keep request groups intact so multi-step creates are not split across chunks. */
+export async function batchUpdatePresentationGrouped(
+  token: string,
+  presentationId: string,
+  groups: SlidesBatchRequest[][],
+  maxRequestsPerChunk = 50,
+): Promise<void> {
+  let pending: SlidesBatchRequest[] = [];
+
+  const flush = async () => {
+    if (pending.length === 0) {
+      return;
+    }
+    await batchUpdatePresentation(token, presentationId, pending);
+    pending = [];
+  };
+
+  for (const group of groups) {
+    if (group.length === 0) {
+      continue;
+    }
+
+    if (
+      pending.length > 0 &&
+      pending.length + group.length > maxRequestsPerChunk
+    ) {
+      await flush();
+    }
+
+    pending.push(...group);
+  }
+
+  await flush();
 }
 
 export function presentationCanEdit(presentation: SlidesPresentation): boolean {

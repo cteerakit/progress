@@ -17,6 +17,7 @@ import {
   getFilmstripScroll,
   getPresentationSlideCount,
   getPresentationIdFromLocation,
+  getSelectedThumbnailInfo,
   pruneChipAnchors,
   repositionChipAnchors,
   upsertChipAnchor,
@@ -24,11 +25,13 @@ import {
   CHIP_OVERLAY_CLASS,
   type ThumbnailInfo,
 } from '../utils/filmstrip';
+import { setActiveSlideState } from '../utils/active-slide';
 import {
   pullRemoteDeck,
   pushLocalDeck,
   requestAuth,
   getAuthStatus,
+  loadPresetsInTab,
   slideIdFromHash,
   watchPresentation,
   unwatchPresentation,
@@ -39,6 +42,12 @@ import {
   onSyncStateChangedInTab,
   persistDeckInTab,
 } from '../utils/content-storage';
+import {
+  cloneStatusPresetConfig,
+  DEFAULT_STATUS_PRESET_CONFIG,
+  validateStatusPresetConfig,
+  type StatusPresetConfig,
+} from '../utils/status-presets';
 import type { SyncState } from '../utils/sync-state';
 import {
   getEffectiveSyncError,
@@ -59,6 +68,20 @@ import {
   type DeckState,
   type SlideStatus,
 } from '../utils/status';
+import { appendSlideLogEntry } from '../utils/slide-log';
+import {
+  getPresentationUsers,
+  getSyncState,
+  setPresentationUsers,
+  statusPresetsByPresentationStorage,
+  usersByPresentationStorage,
+} from '../background/storage';
+import {
+  createEmptyUserCatalog,
+  registerUserInCatalog,
+  type UserCatalog,
+} from '../utils/user-catalog';
+import { isPresetsUpdatedMessage } from '../utils/preset-sync';
 
 const CHIP_BATCH_SIZE = 20;
 const SLIDE_COUNT_STABLE_MS = 200;
@@ -89,7 +112,15 @@ export default defineContentScript({
     let pendingSlideCount: number | null = null;
     let pendingSlideCountTimer: number | null = null;
     let filmstripResizeObserver: ResizeObserver | null = null;
-    let badgeElement: DeckBadgeElement | null = null;
+    const badgeRef: { current: DeckBadgeElement | null } = { current: null };
+    const getBadge = () => badgeRef.current;
+    const setBadge = (next: DeckBadgeElement | null) => {
+      badgeRef.current = next;
+    };
+    let statusPresets: StatusPresetConfig = cloneStatusPresetConfig(
+      DEFAULT_STATUS_PRESET_CONFIG,
+    );
+    let userCatalog: UserCatalog = createEmptyUserCatalog();
 
     const chipFromIndex = (thumbnailIndex: number) => {
       if (!chipOverlay) return null;
@@ -179,6 +210,7 @@ export default defineContentScript({
     };
 
     const updateBadgeLoading = () => {
+      const badgeElement = getBadge();
       if (!badgeElement) {
         return;
       }
@@ -191,10 +223,25 @@ export default defineContentScript({
       badgeElement.setLoading(confirmedSlideCount == null);
     };
 
+    const publishActiveSlide = () => {
+      const selected = getSelectedThumbnailInfo(thumbnails);
+      void setActiveSlideState(
+        selected
+          ? {
+              presentationId,
+              slideKey: selected.slideKey,
+              index: selected.index,
+            }
+          : null,
+      );
+    };
+
     const refreshUi = () => {
       scheduleSlideCountConfirmation();
       const slideCount = getAuthoritativeSlideCount();
       const indexSlideKeys = buildIndexSlideKeyMap(deck, thumbnails);
+
+      publishActiveSlide();
 
       for (const info of thumbnails) {
         const chip = chipFromIndex(info.index);
@@ -203,14 +250,23 @@ export default defineContentScript({
         chip.setSlideKey(info.slideKey);
         chip.setStatus(resolveSlideRecord(deck, info.slideKey, info.index).status);
         chip.setEditable(canEditDeck());
+        chip.setPresets(statusPresets);
       }
 
       if (slideCount) {
-        badgeElement?.setCounts(getDeckCounts(slideCount, deck, indexSlideKeys));
+        getBadge()?.setCounts(
+          getDeckCounts(slideCount, deck, indexSlideKeys, statusPresets),
+        );
       }
-      badgeElement?.setSyncState(badgeSyncState());
-      badgeElement?.setCanEdit(canEditDeck());
+      getBadge()?.setPresets(statusPresets);
+      getBadge()?.setSyncState(badgeSyncState());
+      getBadge()?.setCanEdit(canEditDeck());
       updateBadgeLoading();
+    };
+
+    const applyPresetConfig = (nextPresets: StatusPresetConfig) => {
+      statusPresets = validateStatusPresetConfig(nextPresets);
+      refreshUi();
     };
 
     let persistChain = Promise.resolve();
@@ -261,10 +317,38 @@ export default defineContentScript({
       }
     };
 
+    const refreshLocalSyncState = async (): Promise<void> => {
+      syncState = await getSyncState();
+    };
+
+    const resolveEditorUserIndex = async (): Promise<number | undefined> => {
+      if (!syncState.signedInEmail) {
+        await refreshLocalSyncState();
+      }
+
+      const email = syncState.signedInEmail;
+      if (!email) {
+        return undefined;
+      }
+
+      const result = registerUserInCatalog(userCatalog, {
+        email,
+        picture: syncState.signedInPicture ?? undefined,
+      });
+      if (result.changed) {
+        userCatalog = result.catalog;
+        await setPresentationUsers(presentationId, userCatalog);
+      }
+
+      return result.userIndex;
+    };
+
     const persistStatusChange = async (
       slideKey: string,
       status: SlideStatus,
     ) => {
+      await refreshLocalSyncState();
+
       if (!isSyncReady(syncState, presentationId) || !canEditDeck()) {
         return;
       }
@@ -287,26 +371,35 @@ export default defineContentScript({
         deck,
         slideKey,
         thumbnailIndex,
-      ).updatedAt;
+      );
+
+      if (previous.status === status) {
+        return;
+      }
 
       if (thumbnailIndex != null && isDriveSlideId(resolvedKey)) {
         assignIndexSlideId(deck.idsByIndex, thumbnailIndex, resolvedKey);
         delete deck.slides[indexSlideKey(thumbnailIndex)];
       }
 
-      deck.slides[resolvedKey] = {
+      const updatedBy = await resolveEditorUserIndex();
+      deck.slides[resolvedKey] = appendSlideLogEntry(previous, {
         status,
-        updatedAt: nextUpdatedAt(previous),
-      };
+        updatedAt: nextUpdatedAt(previous.updatedAt),
+        updatedBy,
+      });
       refreshUi();
       await persistLatestDeck();
       await persistChain;
       const pushResult = await pushLocalDeck(presentationId);
-      applyPullResult(pushResult);
+      await applyPullResult(pushResult);
+      userCatalog = await getPresentationUsers(presentationId);
       refreshUi();
     };
 
-    const applyPullResult = (result: Awaited<ReturnType<typeof pullRemoteDeck>>) => {
+    const applyPullResult = async (
+      result: Awaited<ReturnType<typeof pullRemoteDeck>>,
+    ) => {
       const signedIn = Boolean(result.signedIn ?? syncState.signedIn);
       const presentationErrors = { ...(syncState.presentationErrors ?? {}) };
       const presentationCanEdit = { ...(syncState.presentationCanEdit ?? {}) };
@@ -321,6 +414,7 @@ export default defineContentScript({
       }
 
       syncState = {
+        ...(await getSyncState()),
         signedIn,
         lastSyncAt: Date.now(),
         error:
@@ -331,19 +425,23 @@ export default defineContentScript({
               : syncState.error,
         presentationErrors,
         presentationCanEdit,
-        signedInEmail: syncState.signedInEmail,
       };
     };
 
     const activateSignedInSession = async () => {
       if (confirmedSlideCount == null) {
-        badgeElement?.setLoading(true);
+        getBadge()?.setLoading(true);
       }
       try {
         applyIncomingDeck(await loadDeckInTab(presentationId));
         const pullResult = await pullRemoteDeck(presentationId);
-        applyPullResult(pullResult);
+        await applyPullResult(pullResult);
         applyIncomingDeck(await loadDeckInTab(presentationId));
+        const sessionPresets = await loadPresetsInTab(presentationId);
+        if (sessionPresets) {
+          applyPresetConfig(sessionPresets);
+        }
+        userCatalog = await getPresentationUsers(presentationId);
 
         if (!isSyncReady(syncState, presentationId)) {
           clearChips();
@@ -374,11 +472,14 @@ export default defineContentScript({
       async () => {
         if (!syncState.signedIn) {
           const result = await requestAuth(true);
-          syncState = {
-            signedIn: Boolean(result.signedIn),
-            lastSyncAt: Date.now(),
-            error: result.ok ? null : result.error ?? null,
-          };
+          await refreshLocalSyncState();
+          if (!result.ok) {
+            syncState = {
+              ...syncState,
+              signedIn: false,
+              error: result.error ?? null,
+            };
+          }
 
           if (!result.ok || !result.signedIn) {
             clearChips();
@@ -394,12 +495,13 @@ export default defineContentScript({
           return;
         }
 
-        deck = resetDeckStatuses(deck);
+        deck = resetDeckStatuses(deck, await resolveEditorUserIndex());
         refreshUi();
         await persistLatestDeck();
         await persistChain;
         const pushResult = await pushLocalDeck(presentationId);
-        applyPullResult(pushResult);
+        await applyPullResult(pushResult);
+        userCatalog = await getPresentationUsers(presentationId);
         refreshUi();
       },
     );
@@ -410,8 +512,13 @@ export default defineContentScript({
         return;
       }
 
+      if (!getBadge()) {
+        setBadge(createDeckBadge());
+      }
+
+      const badgeElement = getBadge();
       if (!badgeElement) {
-        badgeElement = createDeckBadge();
+        return;
       }
 
       if (badgeElement.previousElementSibling === anchor) {
@@ -474,6 +581,7 @@ export default defineContentScript({
           chip = createStatusChip(
             info.slideKey,
             resolveSlideRecord(deck, info.slideKey, info.index).status,
+            statusPresets,
           );
           chip.dataset.slideKey = info.slideKey;
           anchor.append(chip);
@@ -482,6 +590,7 @@ export default defineContentScript({
         chip.setSlideKey(info.slideKey);
         chip.setStatus(resolveSlideRecord(deck, info.slideKey, info.index).status);
         chip.setEditable(canEditDeck());
+        chip.setPresets(statusPresets);
       });
 
       repositionChips();
@@ -532,23 +641,34 @@ export default defineContentScript({
     };
 
     const authStatus = await getAuthStatus();
-    syncState = {
-      signedIn: Boolean(authStatus.signedIn),
-      lastSyncAt: Date.now(),
-      error: authStatus.ok ? null : authStatus.error ?? null,
-    };
+    await refreshLocalSyncState();
+    if (!authStatus.signedIn) {
+      syncState = {
+        ...syncState,
+        signedIn: false,
+        error: authStatus.ok ? syncState.error : authStatus.error ?? syncState.error,
+      };
+    }
+
+    const initialPresets = await loadPresetsInTab(presentationId);
+    if (initialPresets) {
+      applyPresetConfig(initialPresets);
+    }
+    userCatalog = await getPresentationUsers(presentationId);
 
     mountBadge();
 
     const filmstrip = await waitForFilmstrip();
-    if (!filmstrip || ctx.isInvalid) {
-      badgeElement?.setLoading(false);
+    if (!filmstrip) {
+      getBadge()?.setLoading(false);
+      return;
+    }
+    if (ctx.isInvalid) {
       return;
     }
 
     filmstripRoot = filmstrip;
 
-    filmstripResizeObserver?.disconnect();
     if (typeof ResizeObserver !== 'undefined') {
       filmstripResizeObserver = new ResizeObserver(() => {
         scheduleSlideCountConfirmation();
@@ -710,8 +830,13 @@ export default defineContentScript({
         }
 
         const pullResult = await pullRemoteDeck(presentationId);
-        applyPullResult(pullResult);
+        await applyPullResult(pullResult);
         applyIncomingDeck(await loadDeckInTab(presentationId));
+        const visiblePresets = await loadPresetsInTab(presentationId);
+        if (visiblePresets) {
+          applyPresetConfig(visiblePresets);
+        }
+        userCatalog = await getPresentationUsers(presentationId);
 
         if (!isSyncReady(syncState, presentationId)) {
           clearChips();
@@ -733,6 +858,35 @@ export default defineContentScript({
       applyIncomingDeck(nextDeck);
       refreshUi();
     });
+
+    const unwatchPresets = statusPresetsByPresentationStorage.watch((presets) => {
+      const nextPresets = presets[presentationId];
+      if (!nextPresets) {
+        return;
+      }
+      applyPresetConfig(nextPresets);
+    });
+
+    const unwatchUsers = usersByPresentationStorage.watch((users) => {
+      const nextUsers = users[presentationId];
+      if (!nextUsers) {
+        return;
+      }
+      userCatalog = nextUsers;
+    });
+
+    const onPresetsUpdatedMessage = (message: unknown) => {
+      if (
+        !isPresetsUpdatedMessage(message) ||
+        message.presentationId !== presentationId
+      ) {
+        return;
+      }
+
+      applyPresetConfig(message.presets);
+    };
+
+    browser.runtime.onMessage.addListener(onPresetsUpdatedMessage);
 
     const unwatchSync = onSyncStateChangedInTab((state) => {
       const wasReady = isSyncReady(syncState, presentationId);
@@ -762,6 +916,9 @@ export default defineContentScript({
       document.removeEventListener('visibilitychange', onVisibilityChange);
       void unwatchPresentation(presentationId);
       unwatchDecks();
+      unwatchPresets();
+      unwatchUsers();
+      browser.runtime.onMessage.removeListener(onPresetsUpdatedMessage);
       unwatchSync();
     });
     } catch (error) {

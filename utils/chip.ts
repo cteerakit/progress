@@ -6,10 +6,15 @@ import {
   type DismissiblePanel,
 } from './panel-dismiss';
 import {
-  STATUS_COLORS,
-  STATUS_OPTIONS,
-  type SlideStatus,
-} from './status';
+  DEFAULT_STATUS_PRESET_CONFIG,
+  getPresetColor,
+  getPresetIcon,
+  getPresetLabel,
+  getOrderedSelectablePresets,
+  type StatusPreset,
+  type StatusPresetConfig,
+} from './status-presets';
+import type { SlideStatus } from './status';
 
 const CHIP_CLASS = 'progress-status-chip';
 const STYLE_ID = 'progress-status-chip-styles';
@@ -150,6 +155,7 @@ export type StatusChipElement = HTMLElement & {
   setSlideKey: (slideKey: string) => void;
   setStatus: (status: SlideStatus) => void;
   setEditable: (editable: boolean) => void;
+  setPresets: (config: StatusPresetConfig) => void;
 };
 
 let onStatusChange: StatusChangeHandler = async () => {};
@@ -190,9 +196,40 @@ export function defineStatusChip(handler: StatusChangeHandler): void {
   onStatusChange = handler;
 }
 
+function buildOptionButton(
+  option: StatusPreset,
+  editable: boolean,
+  onSelect: (status: SlideStatus) => void,
+): HTMLButtonElement {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'status-option';
+  item.dataset.status = option.id;
+
+  const optionIcon = createStatusIcon(option.icon, {
+    className: 'option-icon',
+    color: option.color,
+  });
+
+  const label = document.createElement('span');
+  label.textContent = option.label;
+
+  item.append(optionIcon, label);
+  item.addEventListener('click', (event) => {
+    stopSlideInteraction(event);
+    if (!editable) {
+      return;
+    }
+    onSelect(option.id);
+  });
+
+  return item;
+}
+
 export function createStatusChip(
   slideKey: string,
   status: SlideStatus,
+  presets: StatusPresetConfig = DEFAULT_STATUS_PRESET_CONFIG,
 ): StatusChipElement {
   const host = document.createElement('div') as unknown as StatusChipElement;
   host.className = CHIP_CLASS;
@@ -203,13 +240,16 @@ export function createStatusChip(
   let currentKey = slideKey;
   let currentStatus: SlideStatus = status;
   let editable = true;
+  let presetConfig = presets;
 
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'chip-button';
   button.setAttribute('aria-label', 'Slide status');
 
-  const icon = createStatusIcon(status, { className: 'chip-icon' });
+  const icon = createStatusIcon(getPresetIcon(presetConfig, status), {
+    className: 'chip-icon',
+  });
   button.append(icon);
 
   const panel = document.createElement('div');
@@ -262,34 +302,19 @@ export function createStatusChip(
     });
   }
 
-  for (const option of STATUS_OPTIONS) {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'status-option';
-    item.dataset.status = option.value;
-
-    const optionIcon = createStatusIcon(option.value, {
-      className: 'option-icon',
-      color: STATUS_COLORS[option.value],
-    });
-
-    const label = document.createElement('span');
-    label.textContent = option.label;
-
-    item.append(optionIcon, label);
-    item.addEventListener('click', (event) => {
-      stopSlideInteraction(event);
-      if (!editable) {
-        return;
-      }
-      setPanelOpen(false);
-      currentStatus = option.value;
-      render();
-      void onStatusChange(currentKey, option.value);
-    });
-
-    panel.append(item);
-  }
+  const rebuildOptions = () => {
+    panel.replaceChildren();
+    for (const option of getOrderedSelectablePresets(presetConfig)) {
+      panel.append(
+        buildOptionButton(option, editable, (nextStatus) => {
+          setPanelOpen(false);
+          currentStatus = nextStatus;
+          render();
+          void onStatusChange(currentKey, nextStatus);
+        }),
+      );
+    }
+  };
 
   for (const eventName of [
     'pointerdown',
@@ -302,14 +327,13 @@ export function createStatusChip(
   }
 
   const render = () => {
-    const color = STATUS_COLORS[currentStatus];
-    const statusLabel =
-      STATUS_OPTIONS.find((item) => item.value === currentStatus)?.label ??
-      'No status';
+    const color = getPresetColor(presetConfig, currentStatus);
+    const iconId = getPresetIcon(presetConfig, currentStatus);
+    const statusLabel = getPresetLabel(presetConfig, currentStatus);
     button.dataset.status = currentStatus;
     button.dataset.editable = editable ? 'true' : 'false';
     button.style.setProperty('--chip-color', color);
-    setStatusIcon(icon, currentStatus, color);
+    setStatusIcon(icon, iconId, color);
     button.setAttribute(
       'aria-label',
       editable
@@ -344,7 +368,13 @@ export function createStatusChip(
     editable = nextEditable;
     render();
   };
+  host.setPresets = (config) => {
+    presetConfig = config;
+    rebuildOptions();
+    render();
+  };
 
+  rebuildOptions();
   shadow.append(button, panel);
   render();
   return host;

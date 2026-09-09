@@ -8,6 +8,13 @@ export function getChromeRuntime(): ChromeApi['runtime'] | undefined {
   return chromeApi()?.runtime;
 }
 
-export function getChromeStorage(): ChromeApi['storage'] | undefined {
-  return chromeApi()?.storage;
+export function getChromeStorage(
+  area: 'local' | 'session' = 'local',
+): ChromeApi['storage']['local'] | undefined {
+  const storage = chromeApi()?.storage;
+  if (!storage) {
+    return undefined;
+  }
+
+  return area === 'session' ? storage.session : storage.local;
 }

@@ -5,6 +5,7 @@ import {
   createHistoryIcon,
   createProgressRing,
   createStatusIcon,
+  setCompleteIcon,
   setProgressRing,
 } from './material-icons';
 import {
@@ -12,7 +13,13 @@ import {
   unregisterDismissiblePanel,
   type DismissiblePanel,
 } from './panel-dismiss';
-import { STATUS_COLORS } from './status';
+import {
+  DEFAULT_STATUS_PRESET_CONFIG,
+  getPresetColor,
+  getPresetIcon,
+  getPrimaryCompleteStatusId,
+  type StatusPresetConfig,
+} from './status-presets';
 import type { SyncState } from './sync-state';
 
 const BADGE_CLASS = 'progress-deck-badge';
@@ -427,6 +434,7 @@ export type DeckBadgeElement = HTMLElement & {
   setSyncState: (syncState: SyncState) => void;
   setLoading: (loading: boolean) => void;
   setCanEdit: (canEdit: boolean) => void;
+  setPresets: (config: StatusPresetConfig) => void;
 };
 
 export function defineDeckBadge(
@@ -457,6 +465,7 @@ export function createDeckBadge(): DeckBadgeElement {
   };
   let loading = true;
   let canEdit = true;
+  let presetConfig: StatusPresetConfig = DEFAULT_STATUS_PRESET_CONFIG;
 
   const wrap = document.createElement('div');
   wrap.className = 'badge-wrap';
@@ -470,7 +479,11 @@ export function createDeckBadge(): DeckBadgeElement {
 
   const completeIcon = createCompleteIcon({
     className: 'progress-complete-icon',
-    color: STATUS_COLORS.done,
+    color: getPresetColor(
+      presetConfig,
+      getPrimaryCompleteStatusId(presetConfig),
+    ),
+    iconId: getPresetIcon(presetConfig, getPrimaryCompleteStatusId(presetConfig)),
   });
 
   const label = document.createElement('span');
@@ -490,8 +503,6 @@ export function createDeckBadge(): DeckBadgeElement {
   resetButton.type = 'button';
   resetButton.className = 'reset-button';
   resetButton.setAttribute('aria-label', 'Reset all slide statuses to no status');
-
-  resetButton.textContent = '';
 
   const resetIcon = createHistoryIcon({ className: 'reset-icon' });
   const resetLabel = document.createElement('span');
@@ -770,7 +781,11 @@ export function createDeckBadge(): DeckBadgeElement {
     const isComplete = counts.percent === 100;
     wrap.dataset.complete = isComplete ? 'true' : 'false';
 
-    setProgressRing(ring, counts.percent);
+    const primaryCompleteStatusId = getPrimaryCompleteStatusId(presetConfig);
+    const completeColor = getPresetColor(presetConfig, primaryCompleteStatusId);
+    const completeIconId = getPresetIcon(presetConfig, primaryCompleteStatusId);
+    setProgressRing(ring, counts.percent, completeColor);
+    setCompleteIcon(completeIcon, completeIconId, completeColor);
     label.textContent = `${counts.percent}%`;
     percentButton.setAttribute(
       'aria-label',
@@ -786,9 +801,9 @@ export function createDeckBadge(): DeckBadgeElement {
       const left = document.createElement('span');
       left.className = 'detail-label';
 
-      const icon = createStatusIcon(row.status, {
+      const icon = createStatusIcon(getPresetIcon(presetConfig, row.status), {
         className: 'detail-icon',
-        color: STATUS_COLORS[row.status],
+        color: getPresetColor(presetConfig, row.status),
       });
 
       const text = document.createElement('span');
@@ -872,6 +887,10 @@ export function createDeckBadge(): DeckBadgeElement {
   };
   host.setCanEdit = (nextCanEdit) => {
     canEdit = nextCanEdit;
+    render();
+  };
+  host.setPresets = (config) => {
+    presetConfig = config;
     render();
   };
 

@@ -16,7 +16,8 @@ The Extension adds slide status labels inside Google Slides. By default, status 
 
 When you use the Extension, the following information is stored in `chrome.storage.local` on your device:
 
-- **Slide statuses** — The status you assign to each slide (No status, To do, In progress, Need attention, or Done), the internal slide identifier, and a timestamp of when the status was last changed.
+- **Slide statuses** — The status you assign to each slide (using built-in or custom status ids), the internal slide identifier, and a timestamp of when the status was last changed. When signed in, a compact history of prior status changes for each slide may also be stored locally and in marker alt-text.
+- **Status preset configuration** — Your customized status labels, colors, icons, order, and which status counts as complete. This is stored locally and, when signed in, in a hidden catalog marker on the presentation so collaborators see the same preset.
 - **Presentation identifiers** — Google Slides presentation IDs for decks where you have used the Extension, so your statuses can be loaded again when you reopen a file.
 - **Sync state** — Whether you are signed in, when the last sync occurred, and any recent sync error message shown in the popup.
 
@@ -27,7 +28,8 @@ This local data is used only to display status chips, the title-bar progress bad
 If you click **Sign in**, the Extension uses Google OAuth through Chrome's `identity` API and the Google Slides API to sync slide statuses with collaborators:
 
 - **Authentication** — Google handles sign-in. The Extension requests an OAuth token with the `presentations` scope so it can read slide structure and write status marker shapes on presentations you can edit. We do not receive or store your Google account password.
-- **Slide status markers** — When signed in, each assigned status is stored on its slide as a small hidden shape with alt-text metadata (`progress.slide-status`). The payload includes a status code and update timestamp keyed to that slide's page ID. Collaborators with edit access to the same presentation can see these statuses through the Extension.
+- **Slide status markers** — When signed in, each assigned status is stored on its slide as a small hidden shape with alt-text metadata (`progress.slide-status`). The payload includes the current status id, update timestamp, and a compact history of prior status changes keyed to that slide's page ID. Collaborators with edit access to the same presentation can see these statuses and history through the Extension.
+- **Status preset catalog** — When signed in, customized status presets are stored as a hidden catalog marker (`progress.status-presets`) on a slide in the presentation. The catalog includes status labels, colors, icons, order, and which status counts toward completion.
 - **Presentation access** — The Extension reads and updates marker shapes only on presentations you open in Google Slides while using the Extension. API requests use a field mask limited to slide page IDs and marker alt-text; the Extension does not read or modify slide text, images, or speaker notes.
 
 ### Data we do not collect
@@ -49,6 +51,7 @@ We use the data described above solely to provide Extension features:
 - Caching statuses locally for instant UI updates
 - Syncing statuses with collaborators via the Google Slides API when you are signed in
 - Showing sync status and sign-in controls in the toolbar popup
+- Showing per-slide status history for the active slide in the side panel
 
 We do not use your data for advertising, creditworthiness, profiling, or any purpose unrelated to the Extension's core functionality.
 

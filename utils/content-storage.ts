@@ -1,11 +1,13 @@
 import type { DeckState } from './status';
 import { createEmptyDeck } from './status';
+import type { StatusPresetConfig } from './status-presets';
 import type { SyncState } from './sync-state';
 import { getChromeStorage } from './extension-api';
 import { sendBackgroundMessage } from './messages';
 
 const DECKS_KEY = 'decks';
 const SYNC_STATE_KEY = 'syncState';
+const STATUS_PRESETS_KEY = 'statusPresetsByPresentation';
 
 interface StorageChange {
   newValue?: unknown;
@@ -84,6 +86,33 @@ export function onSyncStateChangedInTab(
         lastSyncAt: 0,
         error: null,
       },
+    );
+  };
+
+  storageApi.onChanged.addListener(listener);
+  return () => storageApi.onChanged.removeListener(listener);
+}
+
+export function onPresetsChangedInTab(
+  callback: (presets: Record<string, StatusPresetConfig>) => void,
+): () => void {
+  const storageApi = getChromeStorage();
+  if (!storageApi?.onChanged) {
+    return () => {};
+  }
+
+  const listener = (
+    changes: Record<string, StorageChange>,
+    area: string,
+  ) => {
+    if (area !== 'local' || !changes[STATUS_PRESETS_KEY]) {
+      return;
+    }
+
+    callback(
+      (changes[STATUS_PRESETS_KEY].newValue as
+        | Record<string, StatusPresetConfig>
+        | undefined) ?? {},
     );
   };
 
