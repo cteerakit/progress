@@ -11,7 +11,7 @@
     <main class="page">
       <header>
         <h1>Privacy Policy</h1>
-        <p>Progress for Google Slides · Last updated September 9, 2026</p>
+        <p>Progress for Google Slides · Last updated September 10, 2026</p>
       </header>
 
       <p>
@@ -145,6 +145,61 @@
         developer-controlled infrastructure.
       </p>
 
+      <h2>Data Protection</h2>
+      <p>
+        We take reasonable steps to protect Google user data and other information handled by
+        the Extension.
+      </p>
+      <p><strong>Security procedures</strong></p>
+      <p>
+        Security procedures are in place to protect the confidentiality of your data. Because
+        the Extension does not operate its own servers, protection focuses on secure local
+        handling and least-privilege access to Google APIs.
+      </p>
+      <p><strong>Encryption and secure transport</strong></p>
+      <p>
+        We use encryption to protect your information in transit. All communication with
+        Google services (OAuth, Google Slides API, Google Drive API, and Google userinfo API)
+        uses HTTPS/TLS. No Google user data is transmitted over unencrypted connections.
+      </p>
+      <p><strong>Least-privilege access</strong></p>
+      <p>
+        The Extension requests the narrowest OAuth scopes needed for its features and accesses
+        only the minimum data required:
+      </p>
+      <ul>
+        <li>
+          <strong>presentations</strong> — Reads slide page IDs and writes small hidden marker
+          shapes; does not read or modify slide text, images, or speaker notes.
+        </li>
+        <li>
+          <strong>drive.metadata</strong> — Reads and writes <code>appProperties</code> on the
+          single presentation file you have open; does not list, search, or access other Drive
+          files or file content.
+        </li>
+        <li>
+          <strong>userinfo.email</strong> and <strong>userinfo.profile</strong> — Reads your
+          signed-in email and profile photo URL for display and status history attribution.
+        </li>
+      </ul>
+      <p>
+        API requests use field masks and scoped endpoints so only the data needed for sync is
+        read or written.
+      </p>
+      <p><strong>Local storage and token handling</strong></p>
+      <p>
+        Cached Extension data is stored in <code>chrome.storage.local</code>, which is isolated
+        to this Extension. OAuth access tokens are managed by Chrome's identity API and
+        Google's OAuth infrastructure; we do not store OAuth tokens on developer-controlled
+        servers.
+      </p>
+      <p><strong>Optional sign-in</strong></p>
+      <p>
+        Google user data is accessed only after you explicitly choose <strong>Sign in</strong>
+        in the side panel. Without sign-in, status data stays in your browser and the Extension
+        does not call Google APIs on your behalf.
+      </p>
+
       <h2>Third-Party Services</h2>
       <p>When you sign in, the Extension uses:</p>
       <ul>
@@ -179,27 +234,99 @@
         through Google Slides, Google Drive, and this Extension.
       </p>
 
-      <h2>Data Retention and Deletion</h2>
+      <h2>Google User Data Retention and Deletion</h2>
+      <p>
+        This section describes how Google user data obtained through Google OAuth and Google
+        APIs is retained and how you can delete it.
+      </p>
+      <p><strong>What counts as Google user data in this Extension</strong></p>
+      <p>When you sign in, the Extension may access:</p>
       <ul>
+        <li>Your Google account email and profile photo URL (userinfo scopes)</li>
+        <li>Slide status markers stored on presentations you edit (presentations scope)</li>
         <li>
-          <strong>Local data</strong> — Remains until you clear it or uninstall the
-          Extension. You can reset all slide statuses from the title-bar breakdown panel and
-          clear per-slide history from the side panel.
-        </li>
-        <li>
-          <strong>Slide markers</strong> — Remain on slides until you reset statuses to No
-          status (which deletes the markers) or remove them manually. Signing out stops
-          further sync.
-        </li>
-        <li>
-          <strong>Drive metadata</strong> — Presets and collaborator emails remain on the
-          presentation until overwritten by a later sync or removed through Google Drive.
-        </li>
-        <li>
-          <strong>Authentication</strong> — Click <strong>Sign out</strong> in the side
-          panel Account view to revoke the cached OAuth token.
+          Status preset catalogs and collaborator email addresses stored in Drive file metadata
+          on those presentations (drive.metadata scope)
         </li>
       </ul>
+      <p>
+        We do not collect Google user data on developer-operated servers. Google user data
+        persists only in your browser's local cache and in the Google Slides or Google Drive
+        records for presentations you edit while signed in.
+      </p>
+      <p><strong>Retention</strong></p>
+      <p>We retain Google user data only as long as needed to provide the Extension's features:</p>
+      <ul>
+        <li>
+          <strong>Local cache</strong> — Stored while the Extension is installed and, for
+          signed-in data, while you remain signed in or until you clear extension data.
+        </li>
+        <li>
+          <strong>Slide status markers</strong> — Stored on each slide until you reset statuses,
+          delete markers, or delete the presentation file.
+        </li>
+        <li>
+          <strong>Drive file metadata</strong> — Status presets and collaborator emails remain in
+          the presentation's Drive <code>appProperties</code> until overwritten by a later sync,
+          removed through Google Drive, or deleted with the presentation file.
+        </li>
+        <li>
+          <strong>OAuth tokens</strong> — Managed by Chrome and Google while you remain signed
+          in; revoked when you sign out.
+        </li>
+      </ul>
+      <p>
+        We do not retain Google user data on developer-controlled infrastructure after you
+        uninstall the Extension or sign out, except where that data remains in Google's services
+        under your control.
+      </p>
+      <p><strong>Deletion</strong></p>
+      <p>You may delete Google user data handled by the Extension as follows:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Google user data</th>
+            <th>How to delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>OAuth session and cached sign-in state</td>
+            <td>Click <strong>Sign out</strong> in the side panel Account view</td>
+          </tr>
+          <tr>
+            <td>Local cache (statuses, presets, email, profile photo)</td>
+            <td>Uninstall the Extension or clear its data in Chrome extension settings</td>
+          </tr>
+          <tr>
+            <td>Slide status markers</td>
+            <td>
+              Reset slide statuses to <strong>No status</strong> from the title-bar breakdown
+              panel, or remove the hidden marker shapes in Google Slides
+            </td>
+          </tr>
+          <tr>
+            <td>Drive metadata (presets and collaborator emails)</td>
+            <td>
+              Overwritten when presets change on a later sync, or removed by clearing the
+              presentation's app metadata in Google Drive
+            </td>
+          </tr>
+          <tr>
+            <td>All Extension-related data in your Google account</td>
+            <td>
+              Delete the presentation in Google Drive, or remove markers and metadata using
+              Google Slides and Google Drive controls
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Because we do not operate servers that store Google user data, there is no separate
+        account or database from which we can delete data on your behalf. To request help
+        locating or removing Extension-related Google user data, contact
+        <a href="mailto:c.teerakit@gmail.com">c.teerakit@gmail.com</a>.
+      </p>
 
       <h2>Permissions</h2>
       <ul>

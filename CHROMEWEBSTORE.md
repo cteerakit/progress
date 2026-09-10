@@ -265,9 +265,45 @@ Required before public release because the extension uses the `presentations` sc
 3. **OAuth client** — Type: **Chrome extension**; Item ID: extension ID from Chrome Web Store (`mgebbidbnfnomiilkimbiplmkafccmpf`) or from `npm run generate-extension-key` for testing
 4. **Set client ID** — `WXT_OAUTH_CLIENT_ID` in `.env.local` or build environment
 5. **Verification** — Submit OAuth app for verification with:
-   - Privacy policy URL
-   - YouTube or written demo showing sign-in, preset sync, and status sync on a Google Slides file
+   - Privacy policy URL: https://cteerakit.github.io/progress/privacy.html
+   - YouTube demo video (see **Demo video script** below)
    - Explanation that only slide page IDs, hidden status marker shapes, Drive file metadata for presets/collaborator emails, and the signed-in user profile (email and photo URL) are read/written, not slide text or images
+
+### Demo video script (OAuth verification)
+
+Google rejected submissions when the video did not clearly show **why each scope is needed**. For this app, the most common gap is **`drive.metadata`** — reviewers must see preset/collaborator sync via Drive file metadata, not only slide status chips.
+
+**Before recording**
+
+- Use a **test Google account** added as a test user in Cloud Console (or a separate project if you hit the unverified user cap).
+- Keep OAuth consent screen **In Production**; test scopes in staging/unpacked build if needed.
+- Prepare **two Google accounts** with edit access to the same presentation.
+- Have Chrome DevTools or a second browser/profile ready for the collaborator view.
+
+**Required shots (in order)**
+
+1. **OAuth consent screen** — Sign in from side panel → Account → Sign in. Expand **Show all services** so all four scopes are readable:
+   - `https://www.googleapis.com/auth/presentations`
+   - `https://www.googleapis.com/auth/drive.metadata`
+   - `https://www.googleapis.com/auth/userinfo.email`
+   - `https://www.googleapis.com/auth/userinfo.profile`
+2. **Local-only mode** — Assign statuses without signing in; explain data stays in browser only.
+3. **`presentations` scope** — After sign-in, assign statuses on several slides. Open the same deck in Account B and show statuses synced via hidden marker shapes.
+4. **`drive.metadata` scope (critical)** — In Account A, open side panel → **Statuses** tab. Rename a preset, change a color/icon, or reorder statuses. Save. Switch to Account B, reload or reopen the deck, open **Statuses** tab, and show the **same customized presets** appeared (this sync uses Drive `appProperties`, not slide shapes). Narrate: *"Custom status presets are stored in Google Drive file metadata on this presentation so all collaborators share the same labels."*
+5. **Source account impact for Drive metadata** — Optional but strong: open Google Drive → right-click the presentation → **App details** or use Drive API Explorer to show `appProperties` keys (`c0`, `u0`, etc.) updated after preset edit. If that is too technical, at minimum show Account B receiving preset changes without re-entering them.
+6. **Collaborator attribution (`userinfo` + Drive metadata)** — Change a slide status in Account A. In Account B, open **History** tab and show who made the change (uses signed-in email + collaborator list in Drive metadata).
+7. **Sign out** — Show Sign out stops further sync; existing markers/metadata remain on the file.
+8. **Privacy policy** — Briefly show https://cteerakit.github.io/progress/privacy.html, including the **Data Protection** and **Google User Data Retention and Deletion** sections.
+
+**Narration tips for `drive.metadata`**
+
+> Progress uses `drive.metadata` because custom status labels, colors, icons, and collaborator emails cannot fit in Slides marker shapes alone. They are stored in Drive `appProperties` on the open presentation file only. The extension does not browse Drive, list files, or read presentation content.
+
+**After recording**
+
+- Upload to YouTube (unlisted is fine).
+- Update the demo video URL in Cloud Console OAuth verification form.
+- Reply to the verification email with the new video link and updated privacy policy URL.
 
 **Scope justification for Google verification:**
 > The extension stores slide completion statuses (To do, In progress, Need attention, Done, or custom labels) as hidden marker shapes on each slide so collaborators editing the same presentation can see shared progress. Status presets and collaborator emails are stored in Drive file metadata on that presentation. userinfo.email and userinfo.profile identify who made each status change; profile photos are cached locally and are not written to Drive. The extension does not read or modify slide text, images, or speaker notes—only slide page IDs and marker alt-text.
