@@ -6,7 +6,7 @@
 
 ## Pre-Submission Checklist
 
-- [ ] Run `npm run build && npm run zip` and upload `.output/progress-1.0.0-chrome.zip`
+- [ ] Run `npm run build && npm run zip` and upload `.output/progress-1.0.1-chrome.zip`
 - [ ] Confirm store icon at `public/icons/icon-128.png` (128×128 PNG)
 - [ ] Capture at least 1 screenshot (1280×800 or 640×400) — see Screenshot Notes
 - [ ] Verify privacy policy URL loads: https://progress.teerakit.com/privacy.html
@@ -59,7 +59,7 @@ HOW TO USE
 SUPPORT
 GitHub Issues: https://github.com/cteerakit/progress/issues
 
-Version 1.0.0 — Status labels on slides, progress in the title bar, custom statuses, history, and optional collaborator sync
+Version 1.0.1 — Status labels on slides, progress in the title bar, custom statuses, history, and optional collaborator sync
 ```
 
 **Category**
@@ -344,6 +344,7 @@ Privacy Policy: https://progress.teerakit.com/privacy.html
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
+| 1.0.1 | 2026-09-12 | Native Google one-pick consent for per-deck file access via web OAuth client | Draft |
 | 1.0.0 | 2026-09-12 | Filmstrip chips, title-bar badge, customizable status presets, side panel (history / statuses / account), optional per-file Slides/Drive sync via `drive.file` and Google Picker, privacy policy and terms | Draft |
 
 ---
