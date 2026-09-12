@@ -56,15 +56,13 @@
   }
 
   function createView() {
-    const view = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS)
+    const view = new google.picker.DocsView()
+      .setIncludeFolders(false)
       .setMimeTypes(PRESENTATION_MIME)
       .setMode(google.picker.DocsViewMode.LIST);
 
     if (typeof view.setEnableDrives === 'function') {
       view.setEnableDrives(true);
-    }
-    if (typeof view.setOwnedByMe === 'function') {
-      view.setOwnedByMe(false);
     }
     if (typeof view.setFileIds === 'function') {
       view.setFileIds(fileId);

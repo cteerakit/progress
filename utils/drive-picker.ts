@@ -10,6 +10,8 @@ export const DRIVE_PICKER_CANCELLED = 'PROGRESS_DRIVE_FILE_CANCELLED';
 const PENDING_PICKER_KEY = 'pendingDrivePicker';
 
 const DEFAULT_PICKER_PAGE_URL = 'https://progress.teerakit.com/picker.html';
+const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const PRESENTATION_MIME = 'application/vnd.google-apps.presentation';
 
 interface PendingPicker {
   presentationId: string;
@@ -51,6 +53,20 @@ function pickerAppId(): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** Web application client for launchWebAuthFlow (not the Chrome extension client). */
+function oauthWebClientId(): string {
+  const value = import.meta.env.WXT_OAUTH_WEB_CLIENT_ID;
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function oauthRedirectUriForSetup(): string | null {
+  if (!browser.identity?.getRedirectURL) {
+    return null;
+  }
+
+  return browser.identity.getRedirectURL();
+}
+
 export function pickerOrigin(): string {
   try {
     return new URL(pickerPageUrl()).origin;
@@ -81,6 +97,96 @@ function createNonce(): string {
     return globalThis.crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function parseOAuthRedirectParams(responseUrl: string): URLSearchParams {
+  const url = new URL(responseUrl);
+  const params = new URLSearchParams(url.search);
+  const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+
+  for (const [key, value] of new URLSearchParams(hash)) {
+    if (!params.has(key)) {
+      params.set(key, value);
+    }
+  }
+
+  return params;
+}
+
+function pickedPresentationFromRedirect(
+  params: URLSearchParams,
+  presentationId: string,
+): boolean {
+  const picked = params.get('picked_file_ids');
+  if (picked) {
+    return picked
+      .split(',')
+      .some((id) => id.trim() === presentationId);
+  }
+
+  return params.has('access_token') || params.has('code');
+}
+
+async function refreshAuthTokenCache(token: string | null): Promise<void> {
+  if (!token || !browser.identity?.removeCachedAuthToken) {
+    return;
+  }
+
+  try {
+    await browser.identity.removeCachedAuthToken({ token });
+  } catch (error) {
+    console.warn('[progress] removeCachedAuthToken after file grant failed', error);
+  }
+}
+
+/** Google's native one-file consent (no Drive browser). */
+async function promptDriveFileAccessViaOnePick(
+  presentationId: string,
+): Promise<boolean> {
+  const clientId = oauthWebClientId();
+  if (!clientId || clientId.includes('YOUR_CLIENT_ID')) {
+    return false;
+  }
+
+  if (!browser.identity?.launchWebAuthFlow || !browser.identity.getRedirectURL) {
+    return false;
+  }
+
+  const redirectUri = browser.identity.getRedirectURL();
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'token',
+    redirect_uri: redirectUri,
+    scope: DRIVE_FILE_SCOPE,
+    prompt: 'consent',
+    trigger_onepick: 'true',
+    file_ids: presentationId,
+    mimetypes: PRESENTATION_MIME,
+  });
+
+  let responseUrl: string | undefined;
+  try {
+    responseUrl = await browser.identity.launchWebAuthFlow({
+      url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+      interactive: true,
+    });
+  } catch (error) {
+    console.warn('[progress] one-pick consent failed', error);
+    return false;
+  }
+
+  if (!responseUrl) {
+    return false;
+  }
+
+  const redirectParams = parseOAuthRedirectParams(responseUrl);
+  const oauthError = redirectParams.get('error');
+  if (oauthError) {
+    console.warn('[progress] one-pick consent error', oauthError, redirectParams.get('error_description'));
+    return false;
+  }
+
+  return pickedPresentationFromRedirect(redirectParams, presentationId);
 }
 
 async function readPendingPicker(): Promise<PendingPicker | null> {
@@ -182,7 +288,7 @@ export async function handleDrivePickerWindowRemoved(
   finishWaiter(pending, 'cancelled');
 }
 
-export async function promptDriveFileAccess(
+async function promptDriveFileAccessViaHostedPicker(
   token: string,
   presentationId: string,
 ): Promise<boolean> {
@@ -254,6 +360,26 @@ export async function promptDriveFileAccess(
   });
 
   return outcome === 'picked';
+}
+
+export async function promptDriveFileAccess(
+  token: string,
+  presentationId: string,
+): Promise<boolean> {
+  const onePickGranted = await promptDriveFileAccessViaOnePick(presentationId);
+  if (onePickGranted) {
+    await refreshAuthTokenCache(token);
+    return true;
+  }
+
+  const hostedGranted = await promptDriveFileAccessViaHostedPicker(
+    token,
+    presentationId,
+  );
+  if (hostedGranted) {
+    await refreshAuthTokenCache(token);
+  }
+  return hostedGranted;
 }
 
 async function waitForExistingPicker(

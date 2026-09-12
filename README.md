@@ -58,7 +58,8 @@ This repository already includes the Chrome Web Store public key in `extension.p
 2. Configure the OAuth consent screen (Testing mode is fine for development). Add `drive.file`, `userinfo.email`, and `userinfo.profile`. Do not keep `presentations` or `drive.metadata` unless Google already approved them.
 3. Run `npm run generate-extension-key` and note the extension ID (or use the store ID above)
 4. Create an OAuth client of type **Chrome extension** with that item ID
-5. Export the client ID when running WXT, plus a browser API key and Cloud **project number** for Google Picker:
+5. (Optional) For a simpler “allow this presentation” dialog instead of the hosted Picker page, also create a **Web application** OAuth client in the same project. Add `https://mgebbidbnfnomiilkimbiplmkafccmpf.chromiumapp.org/` as an authorized redirect URI (use your extension ID if it differs). Set `WXT_OAUTH_WEB_CLIENT_ID` to that web client’s ID. **Do not** reuse the Chrome extension client ID here — `launchWebAuthFlow` requires a web client, and using the extension client causes `redirect_uri_mismatch`.
+6. Export the client ID when running WXT, plus a browser API key and Cloud **project number** for Google Picker:
 
 ```bash
 # macOS / Linux

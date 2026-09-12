@@ -266,7 +266,7 @@ function renderAccount(state: SyncState): void {
     statusDot.dataset.state = 'error';
     statusLabel.textContent = 'This presentation needs access';
     statusDetail.textContent =
-      'Allow this open deck once so Progress can sync statuses. Later visits to the same file will not ask again.';
+      'Google will ask you to allow this open presentation once. You are not choosing slides or browsing Drive.';
     statusDetail.dataset.tone = 'error';
     presetEditor?.setEditable(false);
     renderStatuses();

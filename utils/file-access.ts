@@ -1,5 +1,5 @@
 export const FILE_ACCESS_REQUIRED_MESSAGE =
-  'Allow Progress to use this presentation. Google requires a one-time confirmation for each deck.';
+  'Allow Progress to sync this presentation. Google requires a one-time confirmation for each deck (not a slide picker).';
 
 export const PICKER_NOT_CONFIGURED_MESSAGE =
   'Progress cannot confirm this presentation. The Google Picker API key or Cloud project number is missing.';
