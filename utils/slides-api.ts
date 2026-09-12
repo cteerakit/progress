@@ -1,3 +1,5 @@
+import { FileAccessRequiredError, isUnsharedDriveFileResponse } from './file-access';
+
 export const PRESENTATION_FIELDS =
   'revisionId,slides(objectId,pageElements(objectId,title,description)),notesMaster(objectId,pageElements(objectId,title,description)),masters(objectId,pageElements(objectId,title,description))';
 
@@ -44,6 +46,10 @@ export async function fetchPresentation(
   });
 
   if (!response.ok) {
+    const body = await response.clone().text();
+    if (isUnsharedDriveFileResponse(response.status, body)) {
+      throw new FileAccessRequiredError();
+    }
     throw new Error(await formatSlidesError('read', response));
   }
 
@@ -73,6 +79,10 @@ export async function batchUpdatePresentation(
   });
 
   if (!response.ok) {
+    const body = await response.clone().text();
+    if (isUnsharedDriveFileResponse(response.status, body)) {
+      throw new FileAccessRequiredError();
+    }
     throw new Error(await formatSlidesError('update', response));
   }
 }

@@ -2,7 +2,7 @@
 
 **Progress for Google Slides**
 
-Last updated: September 10, 2026
+Last updated: September 12, 2026
 
 This Privacy Policy describes how Progress for Google Slides ("the Extension," "we," "us") handles information when you use our Chrome extension.
 
@@ -29,7 +29,7 @@ This local data is used only to display status chips, the title-bar progress bad
 
 If you click **Sign in** in the side panel Account view, the Extension uses Google OAuth through Chrome's `identity` API, the Google Slides API, and the Google Drive API to sync slide statuses with collaborators:
 
-- **Authentication** — Google handles sign-in. The Extension requests OAuth tokens with the `presentations`, `drive.metadata`, `userinfo.email`, and `userinfo.profile` scopes so it can read slide structure, write status marker shapes on presentations you can edit, read/write preset and collaborator metadata on presentations you open, and identify the signed-in user for status history. We do not receive or store your Google account password.
+- **Authentication** — Google handles sign-in. The Extension requests OAuth tokens with the `drive.file`, `userinfo.email`, and `userinfo.profile` scopes so it can read slide structure, write status marker shapes, and read/write preset and collaborator metadata on presentations you explicitly allow, and identify the signed-in user for status history. After sign-in, Google asks you to confirm each presentation once (Google Picker pre-opened to the deck you already have open). We do not receive or store your Google account password.
 - **Slide status markers** — When signed in, each assigned status is stored on its slide as a small hidden shape with alt-text metadata (`progress.slide-status`). The payload includes the current status id, update timestamp, and a compact history of prior status changes keyed to that slide's page ID. Collaborators with edit access to the same presentation can see these statuses and history through the Extension.
 - **Status preset catalog** — When signed in, customized status presets are stored in Google Drive file metadata (`appProperties`) on the presentation. The catalog includes status labels, colors, icons, order, and which statuses count toward completion.
 - **Collaborator email list** — When signed in, collaborator email addresses are stored in the same Drive file metadata so status history can attribute changes. Profile photo URLs are cached locally and are not written to Drive.
@@ -87,8 +87,7 @@ We use encryption to protect your information in transit. All communication with
 
 The Extension requests the narrowest OAuth scopes needed for its features and accesses only the minimum data required:
 
-- **presentations** — Reads slide page IDs and writes small hidden marker shapes; does not read or modify slide text, images, or speaker notes.
-- **drive.metadata** — Reads and writes `appProperties` on the single presentation file you have open; does not list, search, or access other Drive files or file content.
+- **drive.file** — After you confirm a presentation, reads slide page IDs, writes small hidden marker shapes, and reads/writes `appProperties` on that file only. It does not list, search, or access other Drive files, and it does not read or modify slide text, images, or speaker notes.
 - **userinfo.email** and **userinfo.profile** — Reads your signed-in email and profile photo URL for display and status history attribution.
 
 API requests use field masks and scoped endpoints so only the data needed for sync is read or written.
@@ -99,7 +98,7 @@ Cached Extension data (statuses, presets, signed-in email, and profile photo URL
 
 ### Optional sign-in
 
-Google user data is accessed only after you explicitly choose **Sign in** in the side panel. Without sign-in, status data stays in your browser and the Extension does not call Google APIs on your behalf.
+Google user data is accessed only after you explicitly choose **Sign in** in the side panel and confirm the open presentation. Without sign-in, status data stays in your browser and the Extension does not call Google APIs on your behalf.
 
 ## Third-Party Services
 
@@ -108,7 +107,8 @@ When you sign in, the Extension communicates with:
 - **Google OAuth / Chrome Identity API** — For authentication. See [Google Privacy Policy](https://policies.google.com/privacy).
 - **Google userinfo API** — To read the signed-in user's email and profile photo URL. See [Google Privacy Policy](https://policies.google.com/privacy).
 - **Google Slides API** — To read slide page IDs and write status marker shapes. See [Google API Terms of Service](https://developers.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
-- **Google Drive API** — To read and write status preset and collaborator email metadata on presentations you open. See [Google API Terms of Service](https://developers.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
+- **Google Drive API** — To read and write status preset and collaborator email metadata on presentations you allow. See [Google API Terms of Service](https://developers.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
+- **Google Picker API** — To confirm which open presentation the Extension may use. A short-lived access token is passed in the URL fragment of the confirmation page so it is not sent to GitHub Pages.
 
 We do not share your data with any other third parties.
 
@@ -127,8 +127,8 @@ This section describes how Google user data obtained through Google OAuth and Go
 When you sign in, the Extension may access:
 
 - Your Google account email and profile photo URL (userinfo scopes)
-- Slide status markers stored on presentations you edit (presentations scope)
-- Status preset catalogs and collaborator email addresses stored in Drive file metadata on those presentations (drive.metadata scope)
+- Slide status markers stored on presentations you allow (`drive.file` scope)
+- Status preset catalogs and collaborator email addresses stored in Drive file metadata on those presentations (`drive.file` scope)
 
 We do not collect Google user data on developer-operated servers. Google user data persists only in your browser's local cache and in the Google Slides or Google Drive records for presentations you edit while signed in.
 

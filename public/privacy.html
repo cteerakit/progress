@@ -11,7 +11,7 @@
     <main class="page">
       <header>
         <h1>Privacy Policy</h1>
-        <p>Progress for Google Slides · Last updated September 10, 2026</p>
+        <p>Progress for Google Slides · Last updated September 12, 2026</p>
       </header>
 
       <p>
@@ -63,8 +63,9 @@
       <ul>
         <li>
           <strong>Authentication</strong> — Google OAuth through Chrome's identity API with
-          the <code>presentations</code>, <code>drive.metadata</code>,
-          <code>userinfo.email</code>, and <code>userinfo.profile</code> scopes. We do not
+          the <code>drive.file</code>,
+          <code>userinfo.email</code>, and <code>userinfo.profile</code> scopes. After
+          sign-in, Google asks you to confirm each presentation once. We do not
           receive your Google password.
         </li>
         <li>
@@ -169,13 +170,10 @@
       </p>
       <ul>
         <li>
-          <strong>presentations</strong> — Reads slide page IDs and writes small hidden marker
-          shapes; does not read or modify slide text, images, or speaker notes.
-        </li>
-        <li>
-          <strong>drive.metadata</strong> — Reads and writes <code>appProperties</code> on the
-          single presentation file you have open; does not list, search, or access other Drive
-          files or file content.
+          <strong>drive.file</strong> — After you confirm a presentation, reads slide page
+          IDs, writes small hidden marker shapes, and reads/writes <code>appProperties</code>
+          on that file only; does not list other Drive files or read slide text, images, or
+          speaker notes.
         </li>
         <li>
           <strong>userinfo.email</strong> and <strong>userinfo.profile</strong> — Reads your
@@ -223,6 +221,12 @@
             >Google Drive API</a
           >
         </li>
+        <li>
+          <a href="https://developers.google.com/workspace/drive/picker/guides/overview" rel="noopener noreferrer"
+            >Google Picker API</a
+          >
+          — used only to confirm the presentation you already have open
+        </li>
       </ul>
       <p>We do not share your data with any other third parties.</p>
 
@@ -243,10 +247,10 @@
       <p>When you sign in, the Extension may access:</p>
       <ul>
         <li>Your Google account email and profile photo URL (userinfo scopes)</li>
-        <li>Slide status markers stored on presentations you edit (presentations scope)</li>
+        <li>Slide status markers stored on presentations you allow (<code>drive.file</code> scope)</li>
         <li>
           Status preset catalogs and collaborator email addresses stored in Drive file metadata
-          on those presentations (drive.metadata scope)
+          on those presentations (<code>drive.file</code> scope)
         </li>
       </ul>
       <p>

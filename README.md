@@ -54,27 +54,33 @@ This repository already includes the Chrome Web Store public key in `extension.p
 
 ## Google Cloud OAuth setup
 
-1. Create a Google Cloud project and enable **Google Slides API** and **Google Drive API**
-2. Configure the OAuth consent screen (Testing mode is fine for development)
+1. Create a Google Cloud project and enable **Google Slides API**, **Google Drive API**, and **Google Picker API**
+2. Configure the OAuth consent screen (Testing mode is fine for development). Add `drive.file`, `userinfo.email`, and `userinfo.profile`. Do not keep `presentations` or `drive.metadata` unless Google already approved them.
 3. Run `npm run generate-extension-key` and note the extension ID (or use the store ID above)
 4. Create an OAuth client of type **Chrome extension** with that item ID
-5. Export the client ID when running WXT:
+5. Export the client ID when running WXT, plus a browser API key and Cloud **project number** for Google Picker:
 
 ```bash
 # macOS / Linux
 export WXT_OAUTH_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
+export WXT_GOOGLE_API_KEY="YOUR_BROWSER_API_KEY"
+export WXT_GOOGLE_APP_ID="YOUR_CLOUD_PROJECT_NUMBER"
 
 # Windows PowerShell
 $env:WXT_OAUTH_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
+$env:WXT_GOOGLE_API_KEY="YOUR_BROWSER_API_KEY"
+$env:WXT_GOOGLE_APP_ID="YOUR_CLOUD_PROJECT_NUMBER"
 
 npm run dev
 ```
 
-You can also copy `.env.example` to `.env.local` and set `WXT_OAUTH_CLIENT_ID` there.
+You can also copy `.env.example` to `.env.local` and set `WXT_OAUTH_CLIENT_ID`, `WXT_GOOGLE_API_KEY`, and `WXT_GOOGLE_APP_ID` there.
+
+Enable **Google Slides API**, **Google Drive API**, and **Google Picker API**. Create a browser API key restricted to `https://progress.teerakit.com/*`. The confirmation page lives at `docs/picker.html` and is served from GitHub Pages at `progress.teerakit.com`.
 
 After publishing to the Chrome Web Store, update the OAuth client with the store-assigned extension ID.
 
-The `presentations` scope allows read/write access to presentation content; the Extension only reads slide page IDs and writes small hidden marker shapes for status sync. The `drive.metadata` scope allows read/write of status preset and collaborator email metadata on presentations you open. The `userinfo.email` and `userinfo.profile` scopes identify the signed-in user for status history attribution; profile photos stay in local cache. See `CHROMEWEBSTORE.md` for listing metadata and permission justifications.
+The `drive.file` scope allows access only to presentations you confirm (the open deck, once per file). The Extension then reads slide page IDs, writes small hidden marker shapes, and reads/writes Drive `appProperties` on that file. The `userinfo.email` and `userinfo.profile` scopes identify the signed-in user for status history attribution; profile photos stay in local cache. See `CHROMEWEBSTORE.md` for listing metadata and permission justifications.
 
 ## Build
 
@@ -96,7 +102,7 @@ npm run zip
 
 ## Website
 
-https://cteerakit.github.io/progress/
+https://progress.teerakit.com/
 
 GitHub Pages is served from the `docs/` folder. In the repository settings, set Pages to deploy from branch `main`, folder `/docs`.
 

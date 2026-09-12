@@ -2,7 +2,7 @@
 
 **Progress for Google Slides**
 
-Last updated: September 9, 2026
+Last updated: September 12, 2026
 
 These Terms of Service ("Terms") govern your use of the Progress for Google Slides Chrome extension ("the Extension," "we," "us"). By installing or using the Extension, you agree to these Terms.
 
@@ -18,7 +18,7 @@ You must be able to form a binding contract in your jurisdiction to use the Exte
 
 ## 3. Google Account and Services
 
-Optional sync requires a Google account and your consent to Google OAuth with the `presentations`, `drive.metadata`, `userinfo.email`, and `userinfo.profile` scopes. Your use of Google Slides and related Google services is subject to [Google's Terms of Service](https://policies.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
+Optional sync requires a Google account and your consent to Google OAuth with the `drive.file`, `userinfo.email`, and `userinfo.profile` scopes. After sign-in, you confirm each presentation once so Progress can access only that file. Your use of Google Slides and related Google services is subject to [Google's Terms of Service](https://policies.google.com/terms) and [Google Privacy Policy](https://policies.google.com/privacy).
 
 We are not affiliated with, endorsed by, or sponsored by Google LLC. Google Slides and Google Drive are trademarks of Google LLC.
 

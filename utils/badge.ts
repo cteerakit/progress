@@ -21,6 +21,7 @@ import {
   type StatusPresetConfig,
 } from './status-presets';
 import type { SyncState } from './sync-state';
+import { isFileAccessRequiredMessage } from './file-access';
 
 const BADGE_CLASS = 'progress-deck-badge';
 const STYLE_ID = 'progress-deck-badge-styles';
@@ -586,7 +587,11 @@ export function createDeckBadge(): DeckBadgeElement {
   syncButton.addEventListener('click', async () => {
     setErrorPopoverOpen(false);
     syncButton.disabled = true;
-    syncButton.textContent = syncState.signedIn ? 'Retrying...' : 'Signing in...';
+    syncButton.textContent = syncState.signedIn
+      ? isFileAccessRequiredMessage(syncState.error)
+        ? 'Allowing...'
+        : 'Retrying...'
+      : 'Signing in...';
     try {
       await onSignIn();
     } finally {
@@ -735,6 +740,14 @@ export function createDeckBadge(): DeckBadgeElement {
         syncState.error
           ? `Sign-in failed: ${syncState.error}. Hover for details. Click to retry`
           : 'Sign in to use Progress',
+      );
+    } else if (isFileAccessRequiredMessage(syncState.error)) {
+      syncButton.dataset.state = 'error';
+      syncButton.textContent = 'Allow this presentation';
+      syncButton.disabled = false;
+      syncButton.setAttribute(
+        'aria-label',
+        `${syncState.error} Click to allow this presentation.`,
       );
     } else if (syncState.error) {
       syncButton.dataset.state = 'error';

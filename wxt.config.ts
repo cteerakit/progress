@@ -62,11 +62,13 @@ export default defineConfig({
     oauth2: {
       client_id: oauthClientId,
       scopes: [
-        'https://www.googleapis.com/auth/presentations',
-        'https://www.googleapis.com/auth/drive.metadata',
+        'https://www.googleapis.com/auth/drive.file',
         'https://www.googleapis.com/auth/userinfo.email',
         'https://www.googleapis.com/auth/userinfo.profile',
       ],
+    },
+    externally_connectable: {
+      matches: ['https://progress.teerakit.com/*'],
     },
     icons: {
       16: 'icons/icon-16.png',

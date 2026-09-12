@@ -1,6 +1,6 @@
 # Chrome Web Store Listing — Progress for Google Slides
 
-> Last Updated: 2026-09-09
+> Last Updated: 2026-09-12
 
 ---
 
@@ -9,9 +9,9 @@
 - [ ] Run `npm run build && npm run zip` and upload `.output/progress-1.0.0-chrome.zip`
 - [ ] Confirm store icon at `public/icons/icon-128.png` (128×128 PNG)
 - [ ] Capture at least 1 screenshot (1280×800 or 640×400) — see Screenshot Notes
-- [ ] Verify privacy policy URL loads: https://cteerakit.github.io/progress/privacy.html
+- [ ] Verify privacy policy URL loads: https://progress.teerakit.com/privacy.html
 - [ ] Register OAuth client as **Chrome extension** with published extension ID
-- [ ] Add `presentations`, `drive.metadata`, `userinfo.email`, and `userinfo.profile` scopes to the OAuth consent screen and enable Google Slides API and Google Drive API
+- [ ] Add `drive.file`, `userinfo.email`, and `userinfo.profile` scopes to the OAuth consent screen and enable Google Slides API, Google Drive API, and Google Picker API
 - [ ] Fill data disclosure form using answers in [Data Disclosure Form](#data-disclosure-form) below
 - [ ] Paste store fields from [Dashboard Copy-Paste](#dashboard-copy-paste) below
 - [ ] Add private reviewer notes from [Reviewer Notes](#reviewer-notes-private-field) if prompted
@@ -81,8 +81,8 @@ Assign customizable completion statuses on Google Slides filmstrip thumbnails an
 
 | Field | Value |
 |-------|-------|
-| Privacy policy | https://cteerakit.github.io/progress/privacy.html |
-| Homepage | https://cteerakit.github.io/progress/ |
+| Privacy policy | https://progress.teerakit.com/privacy.html |
+| Homepage | https://progress.teerakit.com/ |
 | Support | https://github.com/cteerakit/progress/issues |
 | Official email (trader contact) | c.teerakit@gmail.com |
 
@@ -147,13 +147,14 @@ Optional caption ideas (add in image editor, not required by CWS):
 | Permission | Type | Justification |
 |------------|------|---------------|
 | `storage` | permissions | Caches slide status assignments, presets, and collaborator profile photos locally so the filmstrip UI updates instantly without waiting for network requests. |
-| `identity` | permissions | Lets users optionally sign in with Google to read and write slide status markers and Drive file metadata on the open presentation. |
+| `identity` | permissions | Lets users optionally sign in with Google to read and write slide status markers and Drive file metadata on presentations they explicitly allow. |
 | `alarms` | permissions | Runs periodic background sync (once per minute) for presentations currently open in Slides, replacing aggressive content-script polling. |
 | `sidePanel` | permissions | Shows status history for the active slide, the status preset editor, and account/sync controls. The side panel opens when the user clicks the toolbar icon. |
 | `https://docs.google.com/*` | host_permissions | Finds open Google Slides tabs so the extension can keep filmstrip chips, presets, and the side panel in sync with the presentation the user is editing. Content scripts run only on `https://docs.google.com/presentation/*`. |
 | `https://slides.googleapis.com/*` | host_permissions | Reads slide structure and writes hidden status marker shapes on the active presentation so collaborators can share slide statuses. Only called when the user is signed in. API requests use a field mask limited to page IDs and marker alt-text. |
 | `https://www.googleapis.com/drive/v3/*` | host_permissions | Reads and writes status preset and collaborator email metadata in Drive `appProperties` on the active presentation so collaborators share the same preset catalog and history attribution. Profile photos are not written to Drive. |
 | `https://www.googleapis.com/oauth2/v3/*` | host_permissions | Fetches the signed-in user's email and profile photo after Google sign-in so status history can show who made each change. Photos are cached locally and are not written to Drive. |
+| `externally_connectable` (`https://progress.teerakit.com/*`) | manifest | Lets the confirmation page on progress.teerakit.com tell the extension which presentation the user allowed in Google Picker. No other websites can message the extension. |
 
 **Content script scope:** `https://docs.google.com/presentation/*` — injects status chips and the title-bar badge only on Google Slides presentation pages.
 
@@ -217,22 +218,22 @@ Use these answers in the Chrome Web Store **Privacy practices** tab. They must m
 
 **Not collected:** Health, financial, communications, location, web history, website content (slide text/images)
 
-**Privacy policy URL:** https://cteerakit.github.io/progress/privacy.html
+**Privacy policy URL:** https://progress.teerakit.com/privacy.html
 
 ---
 
 ## Privacy Policy
 
-**Privacy Policy URL** — https://cteerakit.github.io/progress/privacy.html
+**Privacy Policy URL** — https://progress.teerakit.com/privacy.html
 
-**Terms of Service URL** — https://cteerakit.github.io/progress/terms.html
+**Terms of Service URL** — https://progress.teerakit.com/terms.html
 
 **Extension-hosted pages** (also available after install): `privacy.html`, `terms.html`
 
 **GitHub Pages** — enable Pages from branch `main`, folder `/docs`.
-- Homepage: https://cteerakit.github.io/progress/
-- Privacy: https://cteerakit.github.io/progress/privacy.html
-- Terms: https://cteerakit.github.io/progress/terms.html
+- Homepage: https://progress.teerakit.com/
+- Privacy: https://progress.teerakit.com/privacy.html
+- Terms: https://progress.teerakit.com/terms.html
 
 Chrome Web Store listing: https://chromewebstore.google.com/detail/progress-for-google-slides/mgebbidbnfnomiilkimbiplmkafccmpf
 
@@ -252,26 +253,27 @@ Chrome Web Store listing: https://chromewebstore.google.com/detail/progress-for-
 
 **Support URL** — https://github.com/cteerakit/progress/issues
 
-**Homepage URL** — https://cteerakit.github.io/progress/
+**Homepage URL** — https://progress.teerakit.com/
 
 ---
 
 ## OAuth & Google Verification
 
-Required before public release because the extension uses the `presentations` scope, which can read and write presentation content.
+Required before public release if using sensitive scopes. `drive.file` is non-sensitive; `userinfo.email` and `userinfo.profile` still need standard OAuth verification / brand verification.
 
-1. **Google Cloud Console** — Enable Google Slides API and Google Drive API
-2. **OAuth consent screen** — App name: "Progress for Google Slides"; scopes: `https://www.googleapis.com/auth/presentations`, `https://www.googleapis.com/auth/drive.metadata`, `https://www.googleapis.com/auth/userinfo.email`, `https://www.googleapis.com/auth/userinfo.profile`
+1. **Google Cloud Console** — Enable Google Slides API, Google Drive API, and Google Picker API
+2. **OAuth consent screen** — App name: "Progress for Google Slides"; scopes: `https://www.googleapis.com/auth/drive.file`, `https://www.googleapis.com/auth/userinfo.email`, `https://www.googleapis.com/auth/userinfo.profile`
 3. **OAuth client** — Type: **Chrome extension**; Item ID: extension ID from Chrome Web Store (`mgebbidbnfnomiilkimbiplmkafccmpf`) or from `npm run generate-extension-key` for testing
-4. **Set client ID** — `WXT_OAUTH_CLIENT_ID` in `.env.local` or build environment
-5. **Verification** — Submit OAuth app for verification with:
-   - Privacy policy URL: https://cteerakit.github.io/progress/privacy.html
+4. **Picker** — Browser API key restricted to `https://progress.teerakit.com/*`; Cloud **project number** in `WXT_GOOGLE_APP_ID`; deploy `docs/picker.html` to `progress.teerakit.com`
+5. **Set client ID** — `WXT_OAUTH_CLIENT_ID` in `.env.local` or build environment
+6. **Verification** — Submit OAuth app for verification with:
+   - Privacy policy URL: https://progress.teerakit.com/privacy.html
    - YouTube demo video (see **Demo video script** below)
-   - Explanation that only slide page IDs, hidden status marker shapes, Drive file metadata for presets/collaborator emails, and the signed-in user profile (email and photo URL) are read/written, not slide text or images
+   - Explanation that only user-confirmed presentations are accessed, via Google Picker with `setFileIds` for the open deck
 
 ### Demo video script (OAuth verification)
 
-Google rejected submissions when the video did not clearly show **why each scope is needed**. For this app, the most common gap is **`drive.metadata`** — reviewers must see preset/collaborator sync via Drive file metadata, not only slide status chips.
+Show **why each remaining scope is needed**. Reviewers must see the per-file confirmation and that Progress does not browse Drive.
 
 **Before recording**
 
@@ -282,22 +284,21 @@ Google rejected submissions when the video did not clearly show **why each scope
 
 **Required shots (in order)**
 
-1. **OAuth consent screen** — Sign in from side panel → Account → Sign in. Expand **Show all services** so all four scopes are readable:
-   - `https://www.googleapis.com/auth/presentations`
-   - `https://www.googleapis.com/auth/drive.metadata`
+1. **OAuth consent screen** — Sign in from side panel → Account → Sign in. Expand **Show all services** so the scopes are readable:
+   - `https://www.googleapis.com/auth/drive.file`
    - `https://www.googleapis.com/auth/userinfo.email`
    - `https://www.googleapis.com/auth/userinfo.profile`
-2. **Local-only mode** — Assign statuses without signing in; explain data stays in browser only.
-3. **`presentations` scope** — After sign-in, assign statuses on several slides. Open the same deck in Account B and show statuses synced via hidden marker shapes.
-4. **`drive.metadata` scope (critical)** — In Account A, open side panel → **Statuses** tab. Rename a preset, change a color/icon, or reorder statuses. Save. Switch to Account B, reload or reopen the deck, open **Statuses** tab, and show the **same customized presets** appeared (this sync uses Drive `appProperties`, not slide shapes). Narrate: *"Custom status presets are stored in Google Drive file metadata on this presentation so all collaborators share the same labels."*
-5. **Source account impact for Drive metadata** — Optional but strong: open Google Drive → right-click the presentation → **App details** or use Drive API Explorer to show `appProperties` keys (`c0`, `u0`, etc.) updated after preset edit. If that is too technical, at minimum show Account B receiving preset changes without re-entering them.
-6. **Collaborator attribution (`userinfo` + Drive metadata)** — Change a slide status in Account A. In Account B, open **History** tab and show who made the change (uses signed-in email + collaborator list in Drive metadata).
+2. **Per-file confirmation (`drive.file`)** — After sign-in, show Google Picker opened on the **current** presentation (not a Drive browser). Confirm it. Narrate: *"Progress only accesses this presentation after I allow it. It cannot see other Drive files."*
+3. **Local-only mode** — Assign statuses without signing in; explain data stays in browser only.
+4. **Slide marker sync** — After allowing the file, assign statuses on several slides. Open the same deck in Account B, allow the file once, and show statuses synced via hidden marker shapes.
+5. **Drive file metadata** — In Account A, open side panel → **Statuses** tab. Rename a preset, change a color/icon, or reorder statuses. Save. Switch to Account B, reload or reopen the deck, open **Statuses** tab, and show the **same customized presets** appeared (this sync uses Drive `appProperties` on the allowed file, not slide shapes). Narrate: *"Custom status presets are stored in Google Drive file metadata on this presentation so all collaborators share the same labels."*
+6. **Collaborator attribution (`userinfo`)** — Change a slide status in Account A. In Account B, open **History** tab and show who made the change.
 7. **Sign out** — Show Sign out stops further sync; existing markers/metadata remain on the file.
-8. **Privacy policy** — Briefly show https://cteerakit.github.io/progress/privacy.html, including the **Data Protection** and **Google User Data Retention and Deletion** sections.
+8. **Privacy policy** — Briefly show https://progress.teerakit.com/privacy.html, including the **Data Protection** and **Google User Data Retention and Deletion** sections.
 
-**Narration tips for `drive.metadata`**
+**Narration tips for `drive.file`**
 
-> Progress uses `drive.metadata` because custom status labels, colors, icons, and collaborator emails cannot fit in Slides marker shapes alone. They are stored in Drive `appProperties` on the open presentation file only. The extension does not browse Drive, list files, or read presentation content.
+> Progress uses `drive.file` instead of access to all presentations. The user already has a deck open; Google Picker is pre-jumped to that file ID so they confirm once. Status labels, colors, icons, and collaborator emails are stored in Drive `appProperties` on that same file. The extension does not browse Drive, list files, or read presentation content.
 
 **After recording**
 
@@ -306,7 +307,7 @@ Google rejected submissions when the video did not clearly show **why each scope
 - Reply to the verification email with the new video link and updated privacy policy URL.
 
 **Scope justification for Google verification:**
-> The extension stores slide completion statuses (To do, In progress, Need attention, Done, or custom labels) as hidden marker shapes on each slide so collaborators editing the same presentation can see shared progress. Status presets and collaborator emails are stored in Drive file metadata on that presentation. userinfo.email and userinfo.profile identify who made each status change; profile photos are cached locally and are not written to Drive. The extension does not read or modify slide text, images, or speaker notes—only slide page IDs and marker alt-text.
+> The extension stores slide completion statuses as hidden marker shapes on each slide so collaborators editing the same presentation can see shared progress. Status presets and collaborator emails are stored in Drive file metadata on that presentation. Access uses drive.file: the user confirms the currently open presentation in Google Picker (setFileIds). userinfo.email and userinfo.profile identify who made each status change; profile photos are cached locally and are not written to Drive. The extension does not read or modify slide text, images, or speaker notes—only slide page IDs and marker alt-text.
 
 ---
 
@@ -322,18 +323,19 @@ TEST STEPS
 2. Confirm status chips appear on filmstrip thumbnails
 3. Click a chip and select a status (To do, In progress, Need attention, or Done)
 4. Confirm the title-bar progress badge updates next to the document title
-5. Click the extension toolbar icon — the side panel opens. Use Account to sign in with Google (optional). Use Statuses to customize labels. Use History to see changes for the active slide.
+5. Click the extension toolbar icon — the side panel opens. Use Account to sign in with Google (optional). After sign-in, confirm the open presentation when asked. Use Statuses to customize labels. Use History to see changes for the active slide.
 6. Open the same presentation in another browser/profile with edit access to verify metadata sync
 
 TECHNICAL NOTES
 • Content script matches: https://docs.google.com/presentation/*
 • Does NOT read slide text, images, speaker notes, or browsing history
-• Optional sign-in uses chrome.identity with presentations, drive.metadata, userinfo.email, and userinfo.profile scopes
+• Optional sign-in uses chrome.identity with drive.file, userinfo.email, and userinfo.profile scopes
+• After sign-in, Google Picker confirms the currently open presentation once (setFileIds); later visits reuse that grant
 • Sync writes hidden status marker shapes on slides only in presentations the user can edit
 • Status presets and collaborator emails are stored in Drive appProperties on the presentation
 • Local data stored in chrome.storage.local; no developer-operated servers
 
-Privacy Policy: https://cteerakit.github.io/progress/privacy.html
+Privacy Policy: https://progress.teerakit.com/privacy.html
 ```
 
 ---
@@ -342,7 +344,7 @@ Privacy Policy: https://cteerakit.github.io/progress/privacy.html
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| 1.0.0 | 2026-09-09 | Filmstrip chips, title-bar badge, customizable status presets, side panel (history / statuses / account), optional Slides marker sync and Drive metadata sync, privacy policy and terms | Draft |
+| 1.0.0 | 2026-09-12 | Filmstrip chips, title-bar badge, customizable status presets, side panel (history / statuses / account), optional per-file Slides/Drive sync via `drive.file` and Google Picker, privacy policy and terms | Draft |
 
 ---
 
@@ -350,7 +352,7 @@ Privacy Policy: https://cteerakit.github.io/progress/privacy.html
 
 ### Known Issues / Limitations
 
-- `presentations` is a sensitive OAuth scope; disclose that only marker shapes are written, not slide content.
+- `drive.file` is a non-sensitive OAuth scope; users confirm each presentation once in Google Picker. Disclose that only marker shapes and Drive `appProperties` are written, not slide content.
 - Builds include the public key from `extension.pub.b64` so unpacked testing uses the store extension ID `mgebbidbnfnomiilkimbiplmkafccmpf`. Chrome Web Store assigns the item ID on upload; keep the OAuth client registered to that ID.
 - Unpacked development: `npm run dev` (needs the dev server) or `npm run build:local` (standalone). Load from `.output/chrome-mv3-dev`.
 - OAuth client must be registered to the stable extension ID from `extension.pub.b64` / `npm run generate-extension-key`.

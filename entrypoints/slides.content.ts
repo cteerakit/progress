@@ -433,13 +433,15 @@ export default defineContentScript({
       };
     };
 
-    const activateSignedInSession = async () => {
+    const activateSignedInSession = async (promptForFileAccess = false) => {
       if (getAuthoritativeSlideCount(deck.idsByIndex) == null) {
         getBadge()?.setLoading(true);
       }
       try {
         applyIncomingDeck(await loadDeckInTab(presentationId));
-        const pullResult = await pullRemoteDeck(presentationId);
+        const pullResult = await pullRemoteDeck(presentationId, {
+          promptForFileAccess,
+        });
         await applyPullResult(pullResult);
         applyIncomingDeck(await loadDeckInTab(presentationId));
         const sessionPresets = await loadPresetsInTab(presentationId);
@@ -491,9 +493,12 @@ export default defineContentScript({
             refreshUi();
             return;
           }
+
+          await activateSignedInSession(false);
+          return;
         }
 
-        await activateSignedInSession();
+        await activateSignedInSession(true);
       },
       async () => {
         if (!syncState.signedIn || !canEditDeck()) {

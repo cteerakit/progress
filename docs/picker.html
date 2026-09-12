@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Allow this presentation</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --canvas: light-dark(#fff, #202124);
+        --text: light-dark(#202124, #e8eaed);
+        --muted: light-dark(#5f6368, #9aa0a6);
+        --primary: light-dark(#1a73e8, #8ab4f8);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--canvas);
+        color: var(--text);
+        font: 14px/1.45 "Google Sans", Roboto, Arial, sans-serif;
+      }
+
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      #status[data-tone="error"] {
+        color: #c5221f;
+      }
+
+      button {
+        appearance: none;
+        align-self: flex-start;
+        min-height: 32px;
+        padding: 6px 14px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--primary);
+        color: light-dark(#fff, #202124);
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      button[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Allow Progress to use this presentation</h1>
+      <p id="status">
+        Confirm this open deck so Progress can sync statuses. This is required
+        once per presentation.
+      </p>
+      <button id="retry" type="button" hidden>Try again</button>
+    </main>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="./picker.js"></script>
+  </body>
+</html>

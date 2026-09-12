@@ -16,6 +16,7 @@ import {
 } from '../background/storage';
 import {
   persistActiveSlideState,
+  getActiveSlideState,
   type RepublishActiveSlideMessage,
 } from '../utils/active-slide';
 import { fetchSignedInUserProfile } from '../utils/auth';
@@ -32,6 +33,15 @@ import {
   presentationCanEdit,
   SlidesEditDeniedError,
 } from '../utils/slides-api';
+import {
+  FILE_ACCESS_REQUIRED_MESSAGE,
+  isFileAccessRequiredError,
+} from '../utils/file-access';
+import {
+  handleDrivePickerExternalMessage,
+  handleDrivePickerWindowRemoved,
+  promptDriveFileAccess,
+} from '../utils/drive-picker';
 import {
   buildMarkerDiffRequestGroups,
   decodePresentationMetadata,
@@ -344,12 +354,48 @@ async function syncDeckWithSlides(
   return true;
 }
 
-async function handlePull(presentationId: string): Promise<BackgroundResponse> {
+async function syncDeckWithFileAccess(
+  presentationId: string,
+  token: string,
+  options: { persistRemote?: boolean; promptForFileAccess?: boolean } = {},
+): Promise<boolean> {
+  try {
+    return await syncDeckWithSlides(presentationId, token, {
+      persistRemote: options.persistRemote,
+    });
+  } catch (error) {
+    if (!isFileAccessRequiredError(error) || !options.promptForFileAccess) {
+      throw error;
+    }
+
+    const granted = await promptDriveFileAccess(token, presentationId);
+    if (!granted) {
+      throw error;
+    }
+
+    try {
+      return await syncDeckWithSlides(presentationId, token, {
+        persistRemote: options.persistRemote,
+      });
+    } catch (retryError) {
+      if (isFileAccessRequiredError(retryError)) {
+        throw new Error('This presentation was not found on Google Slides.');
+      }
+      throw retryError;
+    }
+  }
+}
+
+async function handlePull(
+  presentationId: string,
+  options: { promptForFileAccess?: boolean } = {},
+): Promise<BackgroundResponse> {
   return withPresentationLock(presentationId, async () => {
     try {
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithSlides(presentationId, token, {
+        const canEdit = await syncDeckWithFileAccess(presentationId, token, {
           persistRemote: false,
+          promptForFileAccess: options.promptForFileAccess,
         });
         await recordSyncSuccess(presentationId);
         return canEdit;
@@ -374,7 +420,7 @@ async function handlePush(
       const persistRemote =
         options.persistRemote ?? !(await isPresentationWatched(presentationId));
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithSlides(presentationId, token, {
+        const canEdit = await syncDeckWithFileAccess(presentationId, token, {
           persistRemote,
         });
         await recordSyncSuccess(presentationId);
@@ -400,7 +446,7 @@ async function handleClearHistory(
       await overwriteDeckSlides(presentationId, cleared);
 
       const canEdit = await withAuthToken(false, async (token) => {
-        const canEdit = await syncDeckWithSlides(presentationId, token, {
+        const canEdit = await syncDeckWithFileAccess(presentationId, token, {
           persistRemote: true,
         });
         await recordSyncSuccess(presentationId);
@@ -433,6 +479,41 @@ async function reflectAuthInAction(signedIn: boolean): Promise<void> {
   }
 }
 
+async function promptActivePresentationAccess(token: string): Promise<void> {
+  const active = await getActiveSlideState();
+  const presentationId = active?.presentationId;
+  if (!presentationId) {
+    return;
+  }
+
+  try {
+    await fetchPresentation(token, presentationId);
+    await setPresentationSyncError(presentationId, null);
+    return;
+  } catch (error) {
+    if (!isFileAccessRequiredError(error)) {
+      const message =
+        error instanceof Error ? error.message : FILE_ACCESS_REQUIRED_MESSAGE;
+      await recordSyncFailure(presentationId, message);
+      return;
+    }
+  }
+
+  try {
+    const granted = await promptDriveFileAccess(token, presentationId);
+    if (!granted) {
+      await setPresentationSyncError(
+        presentationId,
+        FILE_ACCESS_REQUIRED_MESSAGE,
+      );
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : FILE_ACCESS_REQUIRED_MESSAGE;
+    await recordSyncFailure(presentationId, message);
+  }
+}
+
 async function handleAuth(interactive: boolean): Promise<BackgroundResponse> {
   try {
     const token = await getAuthToken(interactive);
@@ -454,6 +535,10 @@ async function handleAuth(interactive: boolean): Promise<BackgroundResponse> {
     });
     await syncSignedInProfile(token);
     await reflectAuthInAction(true);
+
+    if (interactive) {
+      await promptActivePresentationAccess(token);
+    }
 
     return { ok: true, signedIn: true };
   } catch (error) {
@@ -665,6 +750,23 @@ export default defineBackground(() => {
     }
   })();
 
+  browser.windows.onRemoved.addListener((windowId) => {
+    void handleDrivePickerWindowRemoved(windowId);
+  });
+
+  if (browser.runtime.onMessageExternal) {
+    browser.runtime.onMessageExternal.addListener(
+      (message, sender, sendResponse) => {
+        void handleDrivePickerExternalMessage(message, sender.url).then(
+          (ok) => {
+            sendResponse({ ok });
+          },
+        );
+        return true;
+      },
+    );
+  }
+
   browser.alarms.onAlarm.addListener((alarm) => {
     const flushPresentationId = flushAlarmPresentationId(alarm.name);
     if (flushPresentationId) {
@@ -691,7 +793,9 @@ export default defineBackground(() => {
 
         switch (message.type) {
           case 'PULL':
-            response = await handlePull(message.presentationId);
+            response = await handlePull(message.presentationId, {
+              promptForFileAccess: message.promptForFileAccess,
+            });
             break;
           case 'PUSH':
             response = await handlePush(message.presentationId, {

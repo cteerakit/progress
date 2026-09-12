@@ -4,7 +4,11 @@ import type { StatusPresetConfig } from './status-presets';
 import { getChromeRuntime } from './extension-api';
 
 export type BackgroundMessage =
-  | { type: 'PULL'; presentationId: string }
+  | {
+      type: 'PULL';
+      presentationId: string;
+      promptForFileAccess?: boolean;
+    }
   | { type: 'PUSH'; presentationId: string; persistRemote?: boolean }
   | { type: 'AUTH'; interactive: boolean }
   | { type: 'AUTH_STATUS' }
@@ -57,8 +61,13 @@ export async function sendBackgroundMessage(
 
 export async function pullRemoteDeck(
   presentationId: string,
+  options: { promptForFileAccess?: boolean } = {},
 ): Promise<BackgroundResponse> {
-  return sendBackgroundMessage({ type: 'PULL', presentationId });
+  return sendBackgroundMessage({
+    type: 'PULL',
+    presentationId,
+    promptForFileAccess: options.promptForFileAccess,
+  });
 }
 
 export async function pushLocalDeck(

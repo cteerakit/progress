@@ -1,3 +1,4 @@
+import { FileAccessRequiredError, isUnsharedDriveFileResponse } from './file-access';
 import type { StatusPresetConfig } from './status-presets';
 import {
   decodeCatalogPayload,
@@ -263,7 +264,12 @@ export async function fetchDriveFile(
   });
 
   if (!response.ok) {
-    if (isDriveFileUnavailable(response.status, await response.clone().text())) {
+    const body = await response.clone().text();
+    if (isUnsharedDriveFileResponse(response.status, body)) {
+      throw new FileAccessRequiredError();
+    }
+
+    if (isDriveFileUnavailable(response.status, body)) {
       return EMPTY_DRIVE_FILE;
     }
 
@@ -304,6 +310,10 @@ export async function updateDriveFileProperties(
   });
 
   if (!response.ok) {
+    const body = await response.clone().text();
+    if (isUnsharedDriveFileResponse(response.status, body)) {
+      throw new FileAccessRequiredError();
+    }
     throw new Error(await formatDriveError('update', response));
   }
 }

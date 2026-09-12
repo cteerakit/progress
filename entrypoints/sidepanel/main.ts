@@ -47,9 +47,11 @@ import {
 import {
   canEditPresentation,
   getAnySyncError,
+  getPresentationSyncError,
   isEditAccessKnown,
   type SyncState,
 } from '../../utils/sync-state';
+import { isFileAccessRequiredMessage } from '../../utils/file-access';
 import {
   createEmptyUserCatalog,
   getUserFromCatalog,
@@ -91,6 +93,10 @@ const statusLabel = requireElement('status-label', HTMLElement);
 const signedInEmail = requireElement('signed-in-email', HTMLElement);
 const statusDetail = requireElement('status-detail', HTMLElement);
 const signInButton = requireElement('sign-in', HTMLButtonElement);
+const allowPresentationButton = requireElement(
+  'allow-presentation',
+  HTMLButtonElement,
+);
 const signOutButton = requireElement('sign-out', HTMLButtonElement);
 
 const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -204,6 +210,7 @@ function setView(view: PanelView): void {
 function setBusy(busy: boolean): void {
   document.querySelector('.panel')?.setAttribute('aria-busy', String(busy));
   signInButton.disabled = busy;
+  allowPresentationButton.disabled = busy;
   signOutButton.disabled = busy;
   historyClearButton.disabled = busy || !canEditPresentationDeck();
 }
@@ -219,11 +226,23 @@ function setSignedInEmail(state: SyncState): void {
   signedInEmail.textContent = '';
 }
 
+function currentPresentationNeedsAccess(state: SyncState): boolean {
+  if (!activeSlide) {
+    return false;
+  }
+
+  return isFileAccessRequiredMessage(
+    getPresentationSyncError(state, activeSlide.presentationId),
+  );
+}
+
 function renderAccount(state: SyncState): void {
   syncState = state;
   const syncError = getAnySyncError(state);
+  const needsFileAccess = currentPresentationNeedsAccess(state);
 
   signInButton.hidden = state.signedIn;
+  allowPresentationButton.hidden = !state.signedIn || !needsFileAccess;
   signOutButton.hidden = !state.signedIn;
   setSignedInEmail(state);
 
@@ -237,6 +256,18 @@ function renderAccount(state: SyncState): void {
     } else {
       delete statusDetail.dataset.tone;
     }
+    presetEditor?.setEditable(false);
+    renderStatuses();
+    updateHistoryClearButton(allHistoryEntries.length > 0);
+    return;
+  }
+
+  if (needsFileAccess) {
+    statusDot.dataset.state = 'error';
+    statusLabel.textContent = 'This presentation needs access';
+    statusDetail.textContent =
+      'Allow this open deck once so Progress can sync statuses. Later visits to the same file will not ask again.';
+    statusDetail.dataset.tone = 'error';
     presetEditor?.setEditable(false);
     renderStatuses();
     updateHistoryClearButton(allHistoryEntries.length > 0);
@@ -528,6 +559,14 @@ function renderStatuses(): void {
     return;
   }
 
+  if (isFileAccessRequiredMessage(getAnySyncError(syncState))) {
+    statusesEmpty.hidden = false;
+    statusesEmpty.textContent =
+      'Allow this presentation in Account to customize statuses with collaborators.';
+    presetEditor?.setEditable(false);
+    return;
+  }
+
   if (getAnySyncError(syncState)) {
     statusesEmpty.hidden = false;
     statusesEmpty.textContent = 'Fix sync issues before customizing statuses.';
@@ -662,6 +701,20 @@ async function withBusy(work: () => Promise<void>): Promise<void> {
 signInButton.addEventListener('click', () => {
   void withBusy(async () => {
     await requestAuth(true);
+    if (activeSlide) {
+      await pullRemoteDeck(activeSlide.presentationId);
+    }
+  });
+});
+
+allowPresentationButton.addEventListener('click', () => {
+  void withBusy(async () => {
+    if (!activeSlide) {
+      return;
+    }
+    await pullRemoteDeck(activeSlide.presentationId, {
+      promptForFileAccess: true,
+    });
   });
 });
 
