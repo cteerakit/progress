@@ -34,8 +34,33 @@ function loadEnvFile(filename: string): void {
   }
 }
 
-loadEnvFile('.env');
+// Earlier files win (values already set are not overwritten), matching Vite:
+// shell env > .env.local > .env (committed public build IDs).
 loadEnvFile('.env.local');
+loadEnvFile('.env');
+
+const PLACEHOLDER_PATTERN = /^YOUR_/;
+const REQUIRED_RELEASE_ENV = [
+  'WXT_OAUTH_CLIENT_ID',
+  'WXT_GOOGLE_API_KEY',
+  'WXT_GOOGLE_APP_ID',
+] as const;
+
+const isReleaseBuild =
+  process.argv.some((arg) => arg === 'build' || arg === 'zip') &&
+  !process.argv.includes('development');
+
+if (isReleaseBuild) {
+  const missing = REQUIRED_RELEASE_ENV.filter((key) => {
+    const value = process.env[key];
+    return !value || PLACEHOLDER_PATTERN.test(value);
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Release build is missing real values for: ${missing.join(', ')}. Set them in .env.`,
+    );
+  }
+}
 
 const oauthClientId =
   process.env.WXT_OAUTH_CLIENT_ID ??

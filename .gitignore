@@ -34,8 +34,7 @@ Desktop.ini
 *.sln
 *.sw?
 
-# Secrets / local env
-.env
+# Local env overrides. `.env` holds the public build IDs and is committed.
 .env.*
 !.env.example
 

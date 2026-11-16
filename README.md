@@ -75,7 +75,7 @@ $env:WXT_GOOGLE_APP_ID="YOUR_CLOUD_PROJECT_NUMBER"
 npm run dev
 ```
 
-You can also copy `.env.example` to `.env.local` and set `WXT_OAUTH_CLIENT_ID`, `WXT_GOOGLE_API_KEY`, and `WXT_GOOGLE_APP_ID` there.
+The published extension's IDs live in the committed `.env`. They are public by design (they ship inside the extension), so keep the API key restricted in Cloud Console. For your own fork or local overrides, put values in `.env.local` (git-ignored), which takes precedence over `.env`. `npm run build` and `npm run zip` refuse to run while any required value is still a `YOUR_…` placeholder.
 
 Enable **Google Slides API**, **Google Drive API**, and **Google Picker API**. Create a browser API key restricted to `https://progress.teerakit.com/*`. The confirmation page lives at `docs/picker.html` and is served from GitHub Pages at `progress.teerakit.com`.
 
