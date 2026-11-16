@@ -1,6 +1,8 @@
 import { slideIdFromHash } from './messages';
 import {
   assignIndexSlideId,
+  indexSlideKey,
+  isDriveSlideId,
   parseSlideId,
   pickSlideKey,
   uniqueIndexMappings,
@@ -99,12 +101,10 @@ function isThumbnailSelected(element: Element): boolean {
   );
 }
 
-function slideIdFromElement(element: Element): string | null {
+function slideIdFromDataAttributes(element: Element): string | null {
   const candidates = [
     element.getAttribute('data-slide-page-id'),
     element.getAttribute('data-slide-id'),
-    element instanceof HTMLElement ? element.dataset.slidePageId : undefined,
-    element instanceof HTMLElement ? element.dataset.slideId : undefined,
   ];
 
   for (const raw of candidates) {
@@ -114,14 +114,36 @@ function slideIdFromElement(element: Element): string | null {
     }
   }
 
-  const nested = element.querySelector<HTMLElement>(
+  const nested = element.querySelector<Element>(
     '[data-slide-page-id], [data-slide-id]',
   );
-  if (nested && nested !== element) {
-    return slideIdFromElement(nested);
-  }
+  return nested && nested !== element ? slideIdFromDataAttributes(nested) : null;
+}
 
-  return null;
+const FILMSTRIP_SLIDE_ELEMENT_ID = /^filmstrip-slide-\d+-(.+)$/;
+
+/** Google renders each thumbnail page as `<g id="filmstrip-slide-<n>-<pageId>">`. */
+function slideIdFromElementId(element: Element): string | null {
+  const node = element.id.startsWith('filmstrip-slide-')
+    ? element
+    : element.querySelector('[id^="filmstrip-slide-"]');
+  const match = node?.id.match(FILMSTRIP_SLIDE_ELEMENT_ID);
+  return match ? parseSlideId(match[1]) : null;
+}
+
+interface LiveSlideId {
+  id: string | null;
+  /** Both DOM sources agree on the id. */
+  confirmed: boolean;
+}
+
+function liveSlideIdFromElement(element: Element): LiveSlideId {
+  const fromData = slideIdFromDataAttributes(element);
+  const fromElementId = slideIdFromElementId(element);
+  return {
+    id: fromData ?? fromElementId,
+    confirmed: Boolean(fromData && fromData === fromElementId),
+  };
 }
 
 export function resolveSlideKeyForThumbnail(
@@ -130,7 +152,12 @@ export function resolveSlideKeyForThumbnail(
   idsByIndex: Record<string, string>,
   hashId: string | null = null,
 ): string {
-  return pickSlideKey(slideIdFromElement(element), index, idsByIndex, hashId);
+  return pickSlideKey(
+    liveSlideIdFromElement(element).id,
+    index,
+    idsByIndex,
+    hashId,
+  );
 }
 
 function getThumbnailRect(thumbnail: Element): DOMRect {
@@ -210,29 +237,80 @@ export function getSelectedThumbnailInfo(
   return null;
 }
 
+/**
+ * Resolve each rendered thumbnail to a slide key. A Drive page id may belong
+ * to at most one thumbnail: ids read from the live DOM win, and stale
+ * index → id mappings or a lagging `#slide=` hash never hand a slide's id to
+ * another thumbnail (e.g. a freshly inserted slide that pushed it down).
+ */
 export function buildThumbnailInfos(
   filmstrip: ParentNode,
   idsByIndex: Record<string, string>,
 ): ThumbnailInfo[] {
   const thumbnails = getThumbnails(filmstrip);
-  const selectedIndex = thumbnails.findIndex((element) =>
-    isThumbnailSelected(element),
-  );
   const hashId = slideIdFromHash(window.location.hash);
 
-  return thumbnails.map((element, localIndex) => {
-    const index = getThumbnailGlobalIndex(element, localIndex);
-    return {
-      element,
-      index,
-      slideKey: resolveSlideKeyForThumbnail(
-        element,
-        index,
-        idsByIndex,
-        selectedIndex === localIndex ? hashId : null,
-      ),
-    };
+  const entries = thumbnails.map((element, localIndex) => ({
+    element,
+    index: getThumbnailGlobalIndex(element, localIndex),
+    live: liveSlideIdFromElement(element),
+    selected: isThumbnailSelected(element),
+  }));
+
+  // Pass 1: live DOM ids. When Google briefly renders the same page id on two
+  // thumbnails, keep it on the one whose DOM sources agree (or whose stored
+  // index already maps to it).
+  const owner = new Map<string, number>();
+  entries.forEach((entry, position) => {
+    const id = entry.live.id;
+    if (!id) return;
+    const current = owner.get(id);
+    if (current === undefined) {
+      owner.set(id, position);
+      return;
+    }
+    const rival = entries[current];
+    if (!rival) return;
+    const score = (candidate: typeof entry) =>
+      (candidate.live.confirmed ? 2 : 0) +
+      (idsByIndex[String(candidate.index)] === id ? 1 : 0);
+    if (score(entry) > score(rival)) {
+      owner.set(id, position);
+    }
   });
+
+  const claimed = new Set(owner.keys());
+  const keys = entries.map((entry, position) => {
+    const id = entry.live.id;
+    if (id && owner.get(id) === position) {
+      return id;
+    }
+    return null;
+  });
+
+  // Pass 2: thumbnails without a live id fall back to the hash (selected
+  // thumbnail only) or the stored mapping, unless another thumbnail owns it.
+  entries.forEach((entry, position) => {
+    if (keys[position]) return;
+    const fallbacks = [
+      entry.selected ? hashId : null,
+      idsByIndex[String(entry.index)],
+    ];
+    for (const candidate of fallbacks) {
+      if (candidate && isDriveSlideId(candidate) && !claimed.has(candidate)) {
+        keys[position] = candidate;
+        claimed.add(candidate);
+        return;
+      }
+    }
+    keys[position] = indexSlideKey(entry.index);
+  });
+
+  return entries.map((entry, position) => ({
+    element: entry.element,
+    index: entry.index,
+    slideKey: keys[position] ?? indexSlideKey(entry.index),
+  }));
 }
 
 export function buildIndexSlideKeyMap(
@@ -242,8 +320,11 @@ export function buildIndexSlideKeyMap(
   const indexSlideKeys = { ...deck.idsByIndex };
 
   for (const info of thumbnails) {
-    if (!info.slideKey.startsWith('index:')) {
+    if (isDriveSlideId(info.slideKey)) {
       assignIndexSlideId(indexSlideKeys, info.index, info.slideKey);
+    } else {
+      // Rendered, but no trustworthy id: the stored mapping is stale.
+      delete indexSlideKeys[String(info.index)];
     }
   }
 

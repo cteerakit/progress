@@ -246,6 +246,13 @@ export default defineContentScript({
       );
     };
 
+    // A thumbnail without a live Drive id keeps its own `index:` record; never
+    // borrow the status of whatever slide the stored index mapping points to.
+    const thumbnailStatus = (info: ThumbnailInfo): SlideStatus =>
+      isDriveSlideId(info.slideKey)
+        ? resolveSlideRecord(deck, info.slideKey, info.index).status
+        : (deck.slides[info.slideKey]?.status ?? 'none');
+
     const refreshUi = () => {
       scheduleSlideCountConfirmation();
       const indexSlideKeys = buildIndexSlideKeyMap(deck, thumbnails);
@@ -258,7 +265,7 @@ export default defineContentScript({
         if (!chip) continue;
 
         chip.setSlideKey(info.slideKey);
-        chip.setStatus(resolveSlideRecord(deck, info.slideKey, info.index).status);
+        chip.setStatus(thumbnailStatus(info));
         chip.setEditable(canEditDeck());
         chip.setPresets(statusPresets);
       }
@@ -365,23 +372,16 @@ export default defineContentScript({
 
       const info = thumbnails.find((item) => item.slideKey === slideKey);
       const thumbnailIndex = info?.index;
-      const mappedId =
-        thumbnailIndex != null
-          ? deck.idsByIndex[String(thumbnailIndex)]
-          : undefined;
-      const resolvedKey = isDriveSlideId(slideKey)
-        ? slideKey
-        : info && isDriveSlideId(info.slideKey)
-          ? info.slideKey
-          : mappedId && isDriveSlideId(mappedId)
-            ? mappedId
-            : slideKey;
+      // The chip's key was already resolved against the live filmstrip; an
+      // `index:` key means no slide id is known yet, so don't fall back to a
+      // possibly stale index mapping (that would write to another slide).
+      const resolvedKey = slideKey;
 
-      const previous = resolveSlideRecord(
-        deck,
-        slideKey,
-        thumbnailIndex,
-      );
+      const previous = info
+        ? isDriveSlideId(slideKey)
+          ? resolveSlideRecord(deck, slideKey, thumbnailIndex)
+          : (deck.slides[slideKey] ?? { status: 'none', updatedAt: 0 })
+        : resolveSlideRecord(deck, slideKey);
 
       if (previous.status === status) {
         return;
@@ -585,7 +585,7 @@ export default defineContentScript({
         if (!chip) {
           chip = createStatusChip(
             info.slideKey,
-            resolveSlideRecord(deck, info.slideKey, info.index).status,
+            thumbnailStatus(info),
             statusPresets,
           );
           chip.dataset.slideKey = info.slideKey;
@@ -593,7 +593,7 @@ export default defineContentScript({
         }
 
         chip.setSlideKey(info.slideKey);
-        chip.setStatus(resolveSlideRecord(deck, info.slideKey, info.index).status);
+        chip.setStatus(thumbnailStatus(info));
         chip.setEditable(canEditDeck());
         chip.setPresets(statusPresets);
       });

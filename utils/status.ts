@@ -217,6 +217,41 @@ export function uniqueIndexMappings(
   return result;
 }
 
+/**
+ * Overlay `preferred` index → id mappings on `base`. A Drive id mapped in
+ * `preferred` is dropped from every other index in `base`, so a slide that
+ * moved (e.g. pushed down by a newly inserted slide) does not keep a stale
+ * mapping that hands its id — and its status — to its old position.
+ */
+export function overlayIndexMappings(
+  base: Record<string, string>,
+  preferred: Record<string, string>,
+): Record<string, string> {
+  const preferredIds = new Set(
+    Object.values(preferred).filter((id) => isDriveSlideId(id)),
+  );
+  const result: Record<string, string> = {};
+
+  for (const [index, slideId] of Object.entries(base)) {
+    if (preferredIds.has(slideId) && preferred[index] !== slideId) {
+      continue;
+    }
+    result[index] = slideId;
+  }
+
+  for (const [index, slideId] of Object.entries(preferred)) {
+    if (
+      isDriveSlideId(slideId) ||
+      !result[index] ||
+      !isDriveSlideId(result[index])
+    ) {
+      result[index] = slideId;
+    }
+  }
+
+  return uniqueIndexMappings(result);
+}
+
 /** Highest contiguous-enough deck length implied by index → Drive id mappings. */
 export function getMappedSlideCount(
   idsByIndex: Record<string, string>,
@@ -483,20 +518,9 @@ export function applyLocalDeckSave(
   existing: DeckState,
   incoming: DeckState,
 ): DeckState {
-  const idsByIndex = { ...existing.idsByIndex };
-  for (const [index, slideId] of Object.entries(incoming.idsByIndex)) {
-    if (
-      isDriveSlideId(slideId) ||
-      !idsByIndex[index] ||
-      !isDriveSlideId(idsByIndex[index])
-    ) {
-      idsByIndex[index] = slideId;
-    }
-  }
-
   return pruneRedundantIndexSlides({
     slides: mergeSlideMaps(existing.slides, incoming.slides, 'use-incoming'),
-    idsByIndex,
+    idsByIndex: overlayIndexMappings(existing.idsByIndex, incoming.idsByIndex),
   });
 }
 
@@ -506,7 +530,7 @@ export function applyStorageDeckUpdate(
 ): DeckState {
   return pruneRedundantIndexSlides({
     slides: mergeSlideMaps(local.slides, incoming.slides, 'keep-base'),
-    idsByIndex: { ...incoming.idsByIndex, ...local.idsByIndex },
+    idsByIndex: overlayIndexMappings(incoming.idsByIndex, local.idsByIndex),
   });
 }
 
@@ -517,7 +541,7 @@ export function applyReadOnlyRemoteDeck(
 ): DeckState {
   return pruneRedundantIndexSlides({
     slides: { ...incoming.slides },
-    idsByIndex: { ...incoming.idsByIndex, ...local.idsByIndex },
+    idsByIndex: overlayIndexMappings(incoming.idsByIndex, local.idsByIndex),
   });
 }
 
@@ -623,15 +647,5 @@ export function mergeIdsByIndex(
   local: Record<string, string>,
   remote: Record<string, string>,
 ): Record<string, string> {
-  const merged = { ...local };
-  for (const [index, slideId] of Object.entries(remote)) {
-    if (
-      isDriveSlideId(slideId) ||
-      !merged[index] ||
-      !isDriveSlideId(merged[index])
-    ) {
-      merged[index] = slideId;
-    }
-  }
-  return uniqueIndexMappings(merged);
+  return overlayIndexMappings(local, remote);
 }

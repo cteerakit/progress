@@ -138,6 +138,13 @@ export function presentationCanEdit(presentation: SlidesPresentation): boolean {
   return Boolean(presentation.revisionId);
 }
 
+export const OFFICE_FILE_MESSAGE =
+  'This is a PowerPoint (.pptx) file. Choose File > Save as Google Slides, then use Progress on the new copy.';
+
+function isOfficeFileMessage(apiMessage: string): boolean {
+  return apiMessage.includes('must not be an Office file');
+}
+
 async function formatSlidesError(
   action: 'read' | 'update',
   response: Response,
@@ -170,6 +177,10 @@ async function formatSlidesError(
 
   if (response.status === 401) {
     return 'Slides sign-in expired. Sign in again.';
+  }
+
+  if (isOfficeFileMessage(apiMessage)) {
+    return OFFICE_FILE_MESSAGE;
   }
 
   if (response.status === 403) {

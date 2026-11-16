@@ -46,7 +46,7 @@ import {
 } from '../../utils/status-presets';
 import {
   canEditPresentation,
-  getAnySyncError,
+  getEffectiveSyncError,
   getPresentationSyncError,
   isEditAccessKnown,
   type SyncState,
@@ -226,6 +226,15 @@ function setSignedInEmail(state: SyncState): void {
   signedInEmail.textContent = '';
 }
 
+/** Errors for other open decks (e.g. an Office file) must not leak into this one. */
+function currentSyncError(state: SyncState): string | null {
+  if (!activeSlide) {
+    return state.error;
+  }
+
+  return getEffectiveSyncError(state, activeSlide.presentationId);
+}
+
 function currentPresentationNeedsAccess(state: SyncState): boolean {
   if (!activeSlide) {
     return false;
@@ -238,7 +247,7 @@ function currentPresentationNeedsAccess(state: SyncState): boolean {
 
 function renderAccount(state: SyncState): void {
   syncState = state;
-  const syncError = getAnySyncError(state);
+  const syncError = currentSyncError(state);
   const needsFileAccess = currentPresentationNeedsAccess(state);
 
   signInButton.hidden = state.signedIn;
@@ -559,7 +568,7 @@ function renderStatuses(): void {
     return;
   }
 
-  if (isFileAccessRequiredMessage(getAnySyncError(syncState))) {
+  if (isFileAccessRequiredMessage(currentSyncError(syncState))) {
     statusesEmpty.hidden = false;
     statusesEmpty.textContent =
       'Allow this presentation in Account to customize statuses with collaborators.';
@@ -567,7 +576,7 @@ function renderStatuses(): void {
     return;
   }
 
-  if (getAnySyncError(syncState)) {
+  if (currentSyncError(syncState)) {
     statusesEmpty.hidden = false;
     statusesEmpty.textContent = 'Fix sync issues before customizing statuses.';
     presetEditor?.setEditable(false);
@@ -621,7 +630,7 @@ async function loadPresentationDataFromCache(): Promise<void> {
 }
 
 function syncPresentationDataInBackground(): void {
-  if (!activeSlide || !syncState.signedIn || getAnySyncError(syncState)) {
+  if (!activeSlide || !syncState.signedIn || currentSyncError(syncState)) {
     return;
   }
 

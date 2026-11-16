@@ -1,6 +1,11 @@
 import { storage } from 'wxt/utils/storage';
 import type { DeckState } from '../utils/status';
-import { applyLocalDeckSave, createEmptyDeck, pruneRedundantIndexSlides } from '../utils/status';
+import {
+  applyLocalDeckSave,
+  createEmptyDeck,
+  overlayIndexMappings,
+  pruneRedundantIndexSlides,
+} from '../utils/status';
 import {
   cloneStatusPresetConfig,
   DEFAULT_STATUS_PRESET_CONFIG,
@@ -91,7 +96,7 @@ export async function overwriteDeckSlides(
     const existing = decks[presentationId] ?? createEmptyDeck();
     decks[presentationId] = pruneRedundantIndexSlides({
       slides: { ...deck.slides },
-      idsByIndex: { ...existing.idsByIndex, ...deck.idsByIndex },
+      idsByIndex: overlayIndexMappings(existing.idsByIndex, deck.idsByIndex),
     });
     await decksStorage.setValue(decks);
   });

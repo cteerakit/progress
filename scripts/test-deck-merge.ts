@@ -67,6 +67,8 @@ import {
   pruneRedundantIndexSlides,
   resetDeckStatuses,
   resolveSlideRecord,
+  mergeIdsByIndex,
+  overlayIndexMappings,
   uniqueIndexMappings,
   getMappedSlideCount,
   type DeckState,
@@ -1159,5 +1161,45 @@ assert(
     usersDeleteRequest?.deleteObject?.objectId === 'users-marker',
   'legacy catalog and users markers must delete by object id only',
 );
+
+// Inserting a new slide between A (0) and B (1) pushes B to index 2. The new
+// slide must not inherit B's id (and status) through the stale 1 → B mapping.
+{
+  const stored = { '0': 'id.gA', '1': 'id.gB', '2': 'id.gC' };
+  const live = { '0': 'id.gA', '2': 'id.gB', '3': 'id.gC' };
+  const overlaid = overlayIndexMappings(stored, live);
+  assert(
+    overlaid['1'] === undefined &&
+      overlaid['2'] === 'id.gB' &&
+      overlaid['3'] === 'id.gC',
+    'moved slide ids must drop their stale index mappings',
+  );
+
+  const saved = applyLocalDeckSave(
+    { slides: { 'id.gB': { status: 'done', updatedAt: 5 } }, idsByIndex: stored },
+    { slides: {}, idsByIndex: live },
+  );
+  assert(
+    saved.idsByIndex['1'] === undefined,
+    'saving live mappings must not revive the stale mapping of a moved slide',
+  );
+
+  const fromStorage = applyStorageDeckUpdate(
+    { slides: {}, idsByIndex: live },
+    { slides: {}, idsByIndex: stored },
+  );
+  assert(
+    fromStorage.idsByIndex['1'] === undefined &&
+      fromStorage.idsByIndex['2'] === 'id.gB',
+    'stale stored mappings must not override live tab mappings',
+  );
+
+  const remote = { '0': 'id.gA', '1': 'id.gN', '2': 'id.gB', '3': 'id.gC' };
+  const pulled = mergeIdsByIndex(stored, remote);
+  assert(
+    pulled['1'] === 'id.gN' && pulled['2'] === 'id.gB' && pulled['3'] === 'id.gC',
+    'remote slide order must win over stale local mappings',
+  );
+}
 
 console.log('deck merge tests passed');
