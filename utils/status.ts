@@ -134,9 +134,14 @@ export function isIndexSlideKey(key: string): boolean {
   return key.startsWith('index:');
 }
 
-/** Google Slides page IDs as used in `#slide=id.p` / `#slide=id.p1` / `#slide=id.g…`. */
+/**
+ * Google Slides page IDs as used in `#slide=id.<pageId>`. Editor-made slides
+ * look like `p`, `p1` or `g…`, but API-created and imported slides use other
+ * shapes (`SLIDES_API…`, `i0`, …), so accept any Slides object id except a
+ * bare number (a generic DOM index, not a page id).
+ */
 export function isDriveSlideId(key: string): boolean {
-  return /^id\.(p\d*|g[A-Za-z0-9_-]+)$/.test(key);
+  return /^id\.[A-Za-z0-9_-]+$/.test(key) && !/^id\.\d+$/.test(key);
 }
 
 export function isSlideKey(key: string): boolean {

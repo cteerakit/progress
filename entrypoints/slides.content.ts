@@ -234,16 +234,16 @@ export default defineContentScript({
         return;
       }
 
+      // Always report the open deck, even before sign-in / file access when no
+      // chips are rendered: the side panel needs the presentation id to show
+      // the deck and to request file access for it.
       const selected = getSelectedThumbnailInfo(thumbnails);
-      void setActiveSlideState(
-        selected
-          ? {
-              presentationId,
-              slideKey: selected.slideKey,
-              index: selected.index,
-            }
-          : null,
-      );
+      const hashId = slideIdFromHash(window.location.hash);
+      void setActiveSlideState({
+        presentationId,
+        slideKey: selected?.slideKey ?? hashId ?? '',
+        index: selected?.index ?? null,
+      });
     };
 
     // A thumbnail without a live Drive id keeps its own `index:` record; never

@@ -413,7 +413,7 @@ assert(
 
 const mappingKept = applyLocalDeckSave(
   { slides: { 'id.p1': { status: 'todo', updatedAt: 100 } }, idsByIndex: { '0': 'id.p1' } },
-  { slides: { 'id.p1': { status: 'todo', updatedAt: 100 } }, idsByIndex: { '0': 'id.clip0' } },
+  { slides: { 'id.p1': { status: 'todo', updatedAt: 100 } }, idsByIndex: { '0': 'id.0' } },
 );
 assert(
   mappingKept.idsByIndex['0'] === 'id.p1',
@@ -1201,5 +1201,15 @@ assert(
     'remote slide order must win over stale local mappings',
   );
 }
+
+assert(
+  isDriveSlideId('id.SLIDES_API1234_0') &&
+    isDriveSlideId('id.i0') &&
+    isDriveSlideId('id.ge63a4b4_1_0') &&
+    !isDriveSlideId('index:3') &&
+    !isDriveSlideId('id.') &&
+    !isDriveSlideId('id.a.b'),
+  'any Slides page object id must be a slide key',
+);
 
 console.log('deck merge tests passed');

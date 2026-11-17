@@ -102,21 +102,14 @@ function isThumbnailSelected(element: Element): boolean {
 }
 
 function slideIdFromDataAttributes(element: Element): string | null {
-  const candidates = [
-    element.getAttribute('data-slide-page-id'),
-    element.getAttribute('data-slide-id'),
-  ];
-
-  for (const raw of candidates) {
-    const parsed = parseSlideId(raw);
-    if (parsed) {
-      return parsed;
-    }
+  // Only Google's page-id attribute: generic ids elsewhere in the thumbnail
+  // (clip paths, element ids) are not slide ids.
+  const parsed = parseSlideId(element.getAttribute('data-slide-page-id'));
+  if (parsed) {
+    return parsed;
   }
 
-  const nested = element.querySelector<Element>(
-    '[data-slide-page-id], [data-slide-id]',
-  );
+  const nested = element.querySelector<Element>('[data-slide-page-id]');
   return nested && nested !== element ? slideIdFromDataAttributes(nested) : null;
 }
 
@@ -126,7 +119,7 @@ const FILMSTRIP_SLIDE_ELEMENT_ID = /^filmstrip-slide-\d+-(.+)$/;
 function slideIdFromElementId(element: Element): string | null {
   const node = element.id.startsWith('filmstrip-slide-')
     ? element
-    : element.querySelector('[id^="filmstrip-slide-"]');
+    : element.querySelector('[id^="filmstrip-slide-"]:not([id$="-bg"])');
   const match = node?.id.match(FILMSTRIP_SLIDE_ELEMENT_ID);
   return match ? parseSlideId(match[1]) : null;
 }

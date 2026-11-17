@@ -344,7 +344,7 @@ Privacy Policy: https://progress.teerakit.com/privacy.html
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| 1.0.2 | 2026-11-16 | Fix new slides inheriting (and sharing) the status of the slide below; clearer error for PowerPoint (.pptx) files; sync errors scoped to the current deck in the side panel | Draft |
+| 1.0.2 | 2026-11-16 | Fix new slides inheriting (and sharing) the status of the slide below; fix statuses reverting after refresh on slides with non-standard page ids; side panel detects the open deck before sign-in; clearer error for PowerPoint (.pptx) files; sync errors scoped to the current deck in the side panel | Draft |
 | 1.0.1 | 2026-09-12 | Native Google one-pick consent for per-deck file access via web OAuth client | Draft |
 | 1.0.0 | 2026-09-12 | Filmstrip chips, title-bar badge, customizable status presets, side panel (history / statuses / account), optional per-file Slides/Drive sync via `drive.file` and Google Picker, privacy policy and terms | Draft |
 
